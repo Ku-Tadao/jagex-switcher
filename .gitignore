@@ -1,0 +1,13 @@
+# Local secrets and credential vault copies (never commit)
+.local/
+*.local.json
+
+# RuneLite credential snapshots if stored in-repo during dev
+*.credentials.properties
+credentials/
+
+# .NET build outputs
+app/**/bin/
+app/**/obj/
+dist/
+publish/
