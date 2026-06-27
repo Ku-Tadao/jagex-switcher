@@ -44,6 +44,40 @@ Use **Add Current** only when RuneLite has already written a valid Jagex `creden
 
 ---
 
+## Pair transfer to another PC
+
+Use this when your desktop already has a saved profile and you want to move it to a laptop.
+
+Requirements:
+
+- Both PCs need `JagexSwitcher.exe`.
+- The sending PC needs `cloudflared.exe` in `PATH`, or in the same folder as `JagexSwitcher.exe`.
+- The receiving PC does not need `cloudflared`.
+
+Sender:
+
+1. Select the saved profile.
+2. Click **Send Selected**.
+3. The app starts a local one-use HTTP transfer server.
+4. The app starts Cloudflare Tunnel with:
+
+```text
+cloudflared tunnel --url http://127.0.0.1:<random-port>
+```
+
+5. The Pair URL and Pair code are copied to the clipboard.
+6. Keep the app open until the other PC imports it.
+
+Receiver:
+
+1. Paste the Pair URL and Pair code into the app.
+2. Optional: enter a profile name to rename it on this PC.
+3. Click **Receive Pair**.
+
+The transfer stops after one successful import, after **Stop Share**, or when the sender app closes. The random `trycloudflare.com` URL is not treated as secret by itself; the receiver must also send the 8-digit pairing code.
+
+---
+
 ## Data layout
 
 **Live (RuneLite):**
@@ -98,6 +132,7 @@ Launch: `%LOCALAPPDATA%\RuneLite\RuneLite.exe` with vault creds passed as proces
 - Sessions expire; re-login through Jagex Launcher once and re-import.
 - No Jagex password storage in the switcher.
 - Capture is turned off automatically before normal Play. Advanced settings can leave it on for debugging.
+- Pair transfer sends a saved session to another PC. Only use it with devices you control, and stop sharing once imported.
 
 ---
 
@@ -112,7 +147,7 @@ Launch: `%LOCALAPPDATA%\RuneLite\RuneLite.exe` with vault creds passed as proces
 
 ## Status
 
-C# app: profile list, guided Add Account, Add Current, Play, Remove, Refresh, and advanced capture controls.
+C# app: profile list, guided Add Account, Add Current, Play, Remove, Refresh, pair transfer, and advanced capture controls.
 
 ---
 
@@ -120,3 +155,4 @@ C# app: profile list, guided Add Account, Add Current, Play, Remove, Refresh, an
 
 - [RuneLite: Using Jagex Accounts](https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts)
 - [RuneLite Launcher Configuration](https://github.com/runelite/runelite/wiki/RuneLite-Launcher-Configuration)
+- [Cloudflare Tunnel quick tunnel](https://developers.cloudflare.com/pages/how-to/preview-with-cloudflare-tunnel/)

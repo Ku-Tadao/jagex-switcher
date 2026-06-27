@@ -9,9 +9,13 @@ internal sealed class MainForm : Form
     private readonly Label statusLabel = new();
     private readonly CheckBox advancedSettingsBox = new();
     private readonly FlowLayoutPanel advancedPanel = new();
+    private readonly TextBox pairUrlBox = new();
+    private readonly TextBox pairCodeBox = new();
     private readonly System.Windows.Forms.Timer addAccountTimer = new();
     private Button? cancelAddButton;
+    private Button? stopPairButton;
     private string? pendingProfileName;
+    private SwitcherService.PairTransferSession? activePairTransfer;
 
     public MainForm(SwitcherService switcher)
     {
@@ -25,6 +29,7 @@ internal sealed class MainForm : Form
         BuildLayout();
         addAccountTimer.Interval = 1000;
         addAccountTimer.Tick += (_, _) => WatchAddAccount();
+        FormClosed += (_, _) => activePairTransfer?.Dispose();
         RefreshProfiles();
     }
 
@@ -83,6 +88,22 @@ internal sealed class MainForm : Form
         actions.Controls.Add(NewButton("Play Selected", (_, _) => PlaySelected()));
         actions.Controls.Add(NewButton("Remove Selected", (_, _) => RemoveSelected()));
         actions.Controls.Add(NewButton("Refresh", (_, _) => RefreshProfiles()));
+        actions.Controls.Add(Spacer());
+        actions.Controls.Add(NewLabel("Pair URL"));
+        pairUrlBox.Width = 200;
+        pairUrlBox.Margin = new Padding(0, 0, 0, 8);
+        actions.Controls.Add(pairUrlBox);
+        actions.Controls.Add(NewLabel("Pair code"));
+        pairCodeBox.Width = 200;
+        pairCodeBox.Margin = new Padding(0, 0, 0, 10);
+        actions.Controls.Add(pairCodeBox);
+        actions.Controls.Add(NewButton("Send Selected", async (_, _) => await StartPairTransfer()));
+        actions.Controls.Add(NewButton("Receive Pair", async (_, _) => await ReceivePair()));
+        actions.Controls.Add(NewButton("Copy Pair Info", (_, _) => CopyPairInfo()));
+        stopPairButton = NewButton("Stop Share", (_, _) => StopPairTransfer("Pair transfer stopped."));
+        stopPairButton.Enabled = false;
+        stopPairButton.Visible = false;
+        actions.Controls.Add(stopPairButton);
 
         advancedSettingsBox.Text = "Advanced settings";
         advancedSettingsBox.Width = 200;
@@ -146,6 +167,16 @@ internal sealed class MainForm : Form
         };
         button.Click += click;
         return button;
+    }
+
+    private static Label NewLabel(string text)
+    {
+        return new Label
+        {
+            Text = text,
+            Width = 200,
+            Height = 22
+        };
     }
 
     private static Label Spacer()
@@ -354,6 +385,78 @@ internal sealed class MainForm : Form
         });
     }
 
+    private async Task StartPairTransfer()
+    {
+        var profileName = SelectedProfileName();
+        if (profileName is null)
+        {
+            ShowError("Select a profile first.");
+            return;
+        }
+
+        await RunActionAsync(async () =>
+        {
+            activePairTransfer?.Dispose();
+            statusLabel.Text = "Starting Cloudflare tunnel...";
+
+            var session = await switcher.StartPairTransferAsync(profileName);
+            activePairTransfer = session;
+            session.Completed += () => BeginInvoke((Action)(() =>
+            {
+                if (activePairTransfer == session)
+                {
+                    StopPairTransfer("Pair transfer completed.");
+                }
+            }));
+
+            pairUrlBox.Text = session.TunnelUrl;
+            pairCodeBox.Text = session.Code;
+            stopPairButton!.Enabled = true;
+            stopPairButton.Visible = true;
+            CopyPairInfo();
+            statusLabel.Text = "Pair info copied. Keep this app open until the laptop imports it.";
+        });
+    }
+
+    private async Task ReceivePair()
+    {
+        var pairUrl = pairUrlBox.Text.Trim();
+        var pairCode = pairCodeBox.Text.Trim();
+        var profileName = profileNameBox.Text.Trim();
+
+        await RunActionAsync(async () =>
+        {
+            var importedName = await switcher.ReceivePairAsync(pairUrl, pairCode, profileName);
+            profileNameBox.Clear();
+            LoadProfiles();
+            statusLabel.Text = $"Imported paired profile '{importedName}'.";
+        });
+    }
+
+    private void CopyPairInfo()
+    {
+        if (string.IsNullOrWhiteSpace(pairUrlBox.Text) || string.IsNullOrWhiteSpace(pairCodeBox.Text))
+        {
+            ShowError("No pair info to copy.");
+            return;
+        }
+
+        Clipboard.SetText($"Pair URL: {pairUrlBox.Text.Trim()}{Environment.NewLine}Pair code: {pairCodeBox.Text.Trim()}");
+    }
+
+    private void StopPairTransfer(string message)
+    {
+        activePairTransfer?.Dispose();
+        activePairTransfer = null;
+        if (stopPairButton is not null)
+        {
+            stopPairButton.Enabled = false;
+            stopPairButton.Visible = false;
+        }
+
+        statusLabel.Text = message;
+    }
+
     private string? SelectedProfileName()
     {
         return profileList.SelectedItems.Count == 0
@@ -366,6 +469,19 @@ internal sealed class MainForm : Form
         try
         {
             action();
+            UpdateCaptureStatus();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task RunActionAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
             UpdateCaptureStatus();
         }
         catch (Exception ex)

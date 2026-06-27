@@ -1,4 +1,10 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -66,22 +72,7 @@ internal sealed class SwitcherService
             throw new InvalidOperationException($"No live credentials at {liveCreds}. Log in via Jagex Launcher -> RuneLite first.");
         }
 
-        var displayName = GetJxDisplayName(liveCreds);
-        if (string.IsNullOrWhiteSpace(displayName))
-        {
-            throw new InvalidOperationException("Live credentials file has no JX_DISPLAY_NAME=. Re-login with --insecure-write-credentials enabled.");
-        }
-
-        Directory.CreateDirectory(CredsDir);
-        File.Copy(liveCreds, GetVaultCredPath(profileName), overwrite: true);
-
-        var data = ReadProfiles();
-        data.Profiles[profileName] = new ProfileMetadata
-        {
-            DisplayName = displayName,
-            ImportedAt = DateTimeOffset.Now.ToString("o")
-        };
-        SaveProfiles(data);
+        SaveProfileCredentials(profileName, File.ReadAllText(liveCreds));
     }
 
     public void Play(string profileName)
@@ -120,6 +111,92 @@ internal sealed class SwitcherService
         }
 
         SaveProfiles(data);
+    }
+
+    public async Task<PairTransferSession> StartPairTransferAsync(string profileName)
+    {
+        AssertProfileName(profileName);
+
+        var data = ReadProfiles();
+        if (!data.Profiles.ContainsKey(profileName))
+        {
+            throw new InvalidOperationException($"Unknown profile '{profileName}'.");
+        }
+
+        var vaultPath = GetVaultCredPath(profileName);
+        if (!File.Exists(vaultPath))
+        {
+            throw new InvalidOperationException($"Vault credentials missing for '{profileName}'. Re-import after logging in.");
+        }
+
+        var credentials = File.ReadAllText(vaultPath);
+        var displayName = GetJxDisplayNameFromText(credentials);
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            throw new InvalidOperationException($"Vault credentials for '{profileName}' have no JX_DISPLAY_NAME=. Re-import this profile.");
+        }
+
+        var port = GetFreeTcpPort();
+        var listener = new HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+
+        var session = new PairTransferSession(listener, port, new PairTransferPackage
+        {
+            ProfileName = profileName,
+            DisplayName = displayName,
+            Credentials = credentials
+        }, CreatePairCode());
+
+        try
+        {
+            await session.StartAsync();
+            return session;
+        }
+        catch
+        {
+            session.Dispose();
+            throw;
+        }
+    }
+
+    public async Task<string> ReceivePairAsync(string tunnelUrl, string code, string profileName)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            throw new InvalidOperationException("Pair code is required.");
+        }
+
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        var request = JsonSerializer.Serialize(new PairRequest { Code = code.Trim() }, JsonOptions);
+        using var response = await client.PostAsync(
+            PairEndpointFromUrl(tunnelUrl),
+            new StringContent(request, Encoding.UTF8, "application/json"));
+
+        var body = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(body)
+                ? $"Pair transfer failed: {(int)response.StatusCode} {response.ReasonPhrase}"
+                : body.Trim());
+        }
+
+        var package = JsonSerializer.Deserialize<PairTransferPackage>(body, JsonOptions)
+            ?? throw new InvalidOperationException("Pair transfer returned an empty response.");
+
+        if (string.IsNullOrWhiteSpace(package.Credentials))
+        {
+            throw new InvalidOperationException("Pair transfer returned no credentials.");
+        }
+
+        var importedName = string.IsNullOrWhiteSpace(profileName) ? package.ProfileName?.Trim() : profileName.Trim();
+        if (string.IsNullOrWhiteSpace(importedName))
+        {
+            throw new InvalidOperationException("Pair transfer returned no profile name. Enter a profile name and try again.");
+        }
+
+        SaveProfileCredentials(importedName, package.Credentials);
+        return importedName;
     }
 
     public string PrepareLogin()
@@ -232,6 +309,12 @@ internal sealed class SwitcherService
         {
             ["clientArguments"] = new JsonArray(CaptureFlag)
         }.ToJsonString(JsonOptions);
+
+        if (!Regex.IsMatch(CreatePairCode(), "^\\d{8}$", RegexOptions.CultureInvariant) ||
+            PairEndpointFromUrl("https://example.trycloudflare.com").ToString() != "https://example.trycloudflare.com/pair")
+        {
+            throw new InvalidOperationException("Pair transfer self-check failed.");
+        }
     }
 
     private void StartRuneLite(IReadOnlyDictionary<string, string> environment)
@@ -262,6 +345,28 @@ internal sealed class SwitcherService
         }
 
         Process.Start(startInfo);
+    }
+
+    private void SaveProfileCredentials(string profileName, string credentials)
+    {
+        AssertProfileName(profileName);
+
+        var displayName = GetJxDisplayNameFromText(credentials);
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            throw new InvalidOperationException("Credentials have no JX_DISPLAY_NAME=. Re-login with --insecure-write-credentials enabled.");
+        }
+
+        Directory.CreateDirectory(CredsDir);
+        File.WriteAllText(GetVaultCredPath(profileName), credentials);
+
+        var data = ReadProfiles();
+        data.Profiles[profileName] = new ProfileMetadata
+        {
+            DisplayName = displayName,
+            ImportedAt = DateTimeOffset.Now.ToString("o")
+        };
+        SaveProfiles(data);
     }
 
     private ProfilesData ReadProfiles()
@@ -357,7 +462,13 @@ internal sealed class SwitcherService
 
     private static string? GetJxDisplayName(string path)
     {
-        foreach (var line in File.ReadLines(path))
+        return GetJxDisplayNameFromText(File.ReadAllText(path));
+    }
+
+    private static string? GetJxDisplayNameFromText(string credentials)
+    {
+        using var reader = new StringReader(credentials);
+        while (reader.ReadLine() is { } line)
         {
             if (line.StartsWith("JX_DISPLAY_NAME=", StringComparison.Ordinal))
             {
@@ -366,6 +477,34 @@ internal sealed class SwitcherService
         }
 
         return null;
+    }
+
+    private static string CreatePairCode()
+    {
+        return RandomNumberGenerator.GetInt32(0, 100_000_000).ToString("D8", CultureInfo.InvariantCulture);
+    }
+
+    private static int GetFreeTcpPort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
+    }
+
+    private static Uri PairEndpointFromUrl(string tunnelUrl)
+    {
+        if (!Uri.TryCreate(tunnelUrl.Trim(), UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            throw new InvalidOperationException("Enter the pair URL from the sending PC.");
+        }
+
+        return new UriBuilder(uri)
+        {
+            Path = "pair",
+            Query = "",
+            Fragment = ""
+        }.Uri;
     }
 
     private static Dictionary<string, string> ParseJxEnvironment(IEnumerable<string> lines)
@@ -421,5 +560,226 @@ internal sealed class SwitcherService
 
         [JsonPropertyName("importedAt")]
         public string? ImportedAt { get; set; }
+    }
+
+    private sealed class PairRequest
+    {
+        [JsonPropertyName("code")]
+        public string Code { get; set; } = "";
+    }
+
+    internal sealed class PairTransferPackage
+    {
+        [JsonPropertyName("profileName")]
+        public string ProfileName { get; set; } = "";
+
+        [JsonPropertyName("displayName")]
+        public string DisplayName { get; set; } = "";
+
+        [JsonPropertyName("credentials")]
+        public string Credentials { get; set; } = "";
+    }
+
+    internal sealed class PairTransferSession : IDisposable
+    {
+        private static readonly Regex TunnelUrlPattern = new(
+            "https://[a-z0-9-]+\\.trycloudflare\\.com",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        private readonly HttpListener listener;
+        private readonly int port;
+        private readonly PairTransferPackage package;
+        private readonly CancellationTokenSource stop = new();
+        private Process? cloudflared;
+        private int disposed;
+
+        public PairTransferSession(HttpListener listener, int port, PairTransferPackage package, string code)
+        {
+            this.listener = listener;
+            this.port = port;
+            this.package = package;
+            Code = code;
+        }
+
+        public string Code { get; }
+        public string TunnelUrl { get; private set; } = "";
+        public event Action? Completed;
+
+        public async Task StartAsync()
+        {
+            _ = Task.Run(ServeAsync);
+
+            cloudflared = StartCloudflared(port);
+            TunnelUrl = await WaitForTunnelUrlAsync(cloudflared, stop.Token);
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) == 1)
+            {
+                return;
+            }
+
+            stop.Cancel();
+            listener.Close();
+
+            try
+            {
+                if (cloudflared is { HasExited: false })
+                {
+                    cloudflared.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+                // Best effort cleanup; the transfer is already closed.
+            }
+
+            cloudflared?.Dispose();
+            stop.Dispose();
+        }
+
+        private static Process StartCloudflared(int port)
+        {
+            var localCloudflared = Path.Combine(AppContext.BaseDirectory, "cloudflared.exe");
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = File.Exists(localCloudflared) ? localCloudflared : "cloudflared",
+                Arguments = $"tunnel --url http://127.0.0.1:{port}",
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            };
+
+            try
+            {
+                return Process.Start(startInfo)
+                    ?? throw new InvalidOperationException("Could not start cloudflared.");
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("cloudflared.exe was not found. Install Cloudflare Tunnel, or put cloudflared.exe next to JagexSwitcher.exe.", ex);
+            }
+        }
+
+        private static async Task<string> WaitForTunnelUrlAsync(Process process, CancellationToken cancellationToken)
+        {
+            var found = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            void ReadLine(string? line)
+            {
+                if (line is null)
+                {
+                    return;
+                }
+
+                var match = TunnelUrlPattern.Match(line);
+                if (match.Success)
+                {
+                    found.TrySetResult(match.Value);
+                }
+            }
+
+            process.OutputDataReceived += (_, args) => ReadLine(args.Data);
+            process.ErrorDataReceived += (_, args) => ReadLine(args.Data);
+            process.EnableRaisingEvents = true;
+            process.Exited += (_, _) =>
+            {
+                if (!found.Task.IsCompleted)
+                {
+                    found.TrySetException(new InvalidOperationException("cloudflared exited before creating a tunnel URL."));
+                }
+            };
+
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            var completed = await Task.WhenAny(found.Task, Task.Delay(TimeSpan.FromSeconds(30), cancellationToken));
+            if (completed != found.Task)
+            {
+                throw new InvalidOperationException("Timed out waiting for cloudflared to create a trycloudflare URL.");
+            }
+
+            return await found.Task;
+        }
+
+        private async Task ServeAsync()
+        {
+            try
+            {
+                while (!stop.IsCancellationRequested)
+                {
+                    var context = await listener.GetContextAsync().WaitAsync(stop.Token);
+                    _ = Task.Run(() => HandleContext(context));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (HttpListenerException)
+            {
+            }
+        }
+
+        private void HandleContext(HttpListenerContext context)
+        {
+            var request = context.Request;
+            var response = context.Response;
+
+            if (request.HttpMethod == "GET")
+            {
+                WriteHttp(response, 200, "Pair transfer is ready. Use Jagex Switcher Receive Pair with the pairing code.", "text/plain; charset=utf-8");
+                return;
+            }
+
+            if (request.HttpMethod != "POST" || request.Url?.AbsolutePath != "/pair")
+            {
+                WriteHttp(response, 404, "Not found.", "text/plain; charset=utf-8");
+                return;
+            }
+
+            if (request.ContentLength64 <= 0 || request.ContentLength64 > 2048)
+            {
+                WriteHttp(response, 400, "Bad pair request.", "text/plain; charset=utf-8");
+                return;
+            }
+
+            using var reader = new StreamReader(request.InputStream, request.ContentEncoding ?? Encoding.UTF8);
+            var body = reader.ReadToEnd();
+            PairRequest? pairRequest;
+            try
+            {
+                pairRequest = JsonSerializer.Deserialize<PairRequest>(body, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                WriteHttp(response, 400, "Bad pair request.", "text/plain; charset=utf-8");
+                return;
+            }
+
+            if (!string.Equals(pairRequest?.Code, Code, StringComparison.Ordinal))
+            {
+                WriteHttp(response, 403, "Pair code did not match.", "text/plain; charset=utf-8");
+                return;
+            }
+
+            WriteHttp(response, 200, JsonSerializer.Serialize(package, JsonOptions), "application/json; charset=utf-8");
+            Completed?.Invoke();
+            Dispose();
+        }
+
+        private static void WriteHttp(HttpListenerResponse response, int statusCode, string body, string contentType)
+        {
+            var bodyBytes = Encoding.UTF8.GetBytes(body);
+            response.StatusCode = statusCode;
+            response.ContentType = contentType;
+            response.ContentLength64 = bodyBytes.Length;
+            response.OutputStream.Write(bodyBytes);
+            response.Close();
+        }
     }
 }
