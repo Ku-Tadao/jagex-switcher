@@ -2,7 +2,7 @@
 
 Switch between Jagex account characters on one Windows user by launching RuneLite with saved Jagex session values.
 
-**Last updated:** 2026-06-27
+**Last updated:** 2026-06-28
 
 ---
 
@@ -40,6 +40,8 @@ Capture toggles and prepare-login controls are under **Advanced settings** in th
 
 Manual alternative: RuneLite (configure) → Client arguments → `--insecure-write-credentials` → Save.
 
+Use **Add Current** only when RuneLite has already written a valid Jagex `credentials.properties` file. It imports the current file without opening Jagex Launcher or watching processes.
+
 ---
 
 ## Data layout
@@ -67,6 +69,12 @@ Vault lives outside this git repo. Windows user ACL only.
 ## App
 
 Open `JagexSwitcher.sln` in Visual Studio.
+
+Latest release:
+
+```text
+https://github.com/Ku-Tadao/jagex-switcher/releases/latest
+```
 
 Local build:
 

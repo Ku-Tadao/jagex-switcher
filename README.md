@@ -2,6 +2,14 @@
 
 Quick account switcher for OSRS / RuneLite on Windows.
 
+## Download
+
+Get the latest `JagexSwitcher.exe` from the private repo's Releases page:
+
+https://github.com/Ku-Tadao/jagex-switcher/releases/latest
+
+The app is a small framework-dependent executable. The target PC needs the .NET 8 Desktop Runtime installed.
+
 ## App
 
 Open `JagexSwitcher.sln` in Visual Studio.
@@ -11,8 +19,6 @@ Rebuild the single exe:
 ```text
 .\publish-app.cmd
 ```
-
-This produces a small framework-dependent exe, so the target PC needs the .NET 8 Desktop Runtime installed.
 
 Every push to `main` builds a fresh `JagexSwitcher.exe` and attaches it to a new GitHub Release.
 
@@ -26,6 +32,7 @@ Every push to `main` builds a fresh `JagexSwitcher.exe` and attaches it to a new
 ## In short
 
 Use `Add Account` in the app to enable capture, open Jagex Launcher, wait for a Jagex-launched RuneLite session, and import the captured character.
+Use `Add Current` only when RuneLite has already written a valid Jagex `credentials.properties` file.
 Capture/debug controls live behind `Advanced settings`. Normal `Play` turns capture off automatically before launching.
 
 Vault (outside repo): `%APPDATA%\jagex-account-switcher\`
