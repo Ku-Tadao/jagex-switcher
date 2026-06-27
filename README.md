@@ -9,8 +9,7 @@ Get the latest `JagexSwitcher.exe` from the private repo's Releases page:
 https://github.com/Ku-Tadao/jagex-switcher/releases/latest
 
 The app is a small framework-dependent executable. The target PC needs the .NET 8 Desktop Runtime installed.
-
-Pair transfer uses Cloudflare Tunnel quick tunnels. The sending PC also needs `cloudflared.exe` in `PATH`, or next to `JagexSwitcher.exe`.
+Pair transfer downloads Cloudflare Tunnel on first use and caches it under `%APPDATA%\jagex-account-switcher\tools\`.
 
 ## App
 

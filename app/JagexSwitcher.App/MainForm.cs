@@ -397,7 +397,7 @@ internal sealed class MainForm : Form
         await RunActionAsync(async () =>
         {
             activePairTransfer?.Dispose();
-            statusLabel.Text = "Starting Cloudflare tunnel...";
+            statusLabel.Text = "Preparing Cloudflare tunnel...";
 
             var session = await switcher.StartPairTransferAsync(profileName);
             activePairTransfer = session;

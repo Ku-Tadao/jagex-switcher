@@ -16,6 +16,7 @@ namespace JagexSwitcher.App;
 internal sealed class SwitcherService
 {
     private const string CaptureFlag = "--insecure-write-credentials";
+    private const string CloudflaredDownloadUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -48,6 +49,7 @@ internal sealed class SwitcherService
         "JagexLauncher.exe");
 
     private string CredsDir => Path.Combine(vaultRoot, "credentials");
+    private string ToolsDir => Path.Combine(vaultRoot, "tools");
     private string ProfilesFile => Path.Combine(vaultRoot, "profiles.json");
 
     public IReadOnlyList<ProfileInfo> GetProfiles()
@@ -137,11 +139,12 @@ internal sealed class SwitcherService
         }
 
         var port = GetFreeTcpPort();
+        var cloudflaredPath = await EnsureCloudflaredAsync();
         var listener = new HttpListener();
         listener.Prefixes.Add($"http://127.0.0.1:{port}/");
         listener.Start();
 
-        var session = new PairTransferSession(listener, port, new PairTransferPackage
+        var session = new PairTransferSession(listener, port, cloudflaredPath, new PairTransferPackage
         {
             ProfileName = profileName,
             DisplayName = displayName,
@@ -345,6 +348,46 @@ internal sealed class SwitcherService
         }
 
         Process.Start(startInfo);
+    }
+
+    private async Task<string> EnsureCloudflaredAsync()
+    {
+        var localCloudflared = Path.Combine(AppContext.BaseDirectory, "cloudflared.exe");
+        if (File.Exists(localCloudflared))
+        {
+            return localCloudflared;
+        }
+
+        var cachedCloudflared = Path.Combine(ToolsDir, "cloudflared.exe");
+        if (File.Exists(cachedCloudflared))
+        {
+            return cachedCloudflared;
+        }
+
+        Directory.CreateDirectory(ToolsDir);
+        var tempCloudflared = cachedCloudflared + ".download";
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
+            await using var download = await client.GetStreamAsync(CloudflaredDownloadUrl);
+            await using (var file = File.Create(tempCloudflared))
+            {
+                await download.CopyToAsync(file);
+            }
+
+            File.Move(tempCloudflared, cachedCloudflared, overwrite: true);
+        }
+        catch
+        {
+            if (File.Exists(tempCloudflared))
+            {
+                File.Delete(tempCloudflared);
+            }
+
+            throw;
+        }
+
+        return cachedCloudflared;
     }
 
     private void SaveProfileCredentials(string profileName, string credentials)
@@ -588,15 +631,17 @@ internal sealed class SwitcherService
 
         private readonly HttpListener listener;
         private readonly int port;
+        private readonly string cloudflaredPath;
         private readonly PairTransferPackage package;
         private readonly CancellationTokenSource stop = new();
         private Process? cloudflared;
         private int disposed;
 
-        public PairTransferSession(HttpListener listener, int port, PairTransferPackage package, string code)
+        public PairTransferSession(HttpListener listener, int port, string cloudflaredPath, PairTransferPackage package, string code)
         {
             this.listener = listener;
             this.port = port;
+            this.cloudflaredPath = cloudflaredPath;
             this.package = package;
             Code = code;
         }
@@ -609,7 +654,7 @@ internal sealed class SwitcherService
         {
             _ = Task.Run(ServeAsync);
 
-            cloudflared = StartCloudflared(port);
+            cloudflared = StartCloudflared(cloudflaredPath, port);
             TunnelUrl = await WaitForTunnelUrlAsync(cloudflared, stop.Token);
         }
 
@@ -639,12 +684,11 @@ internal sealed class SwitcherService
             stop.Dispose();
         }
 
-        private static Process StartCloudflared(int port)
+        private static Process StartCloudflared(string cloudflaredPath, int port)
         {
-            var localCloudflared = Path.Combine(AppContext.BaseDirectory, "cloudflared.exe");
             var startInfo = new ProcessStartInfo
             {
-                FileName = File.Exists(localCloudflared) ? localCloudflared : "cloudflared",
+                FileName = cloudflaredPath,
                 Arguments = $"tunnel --url http://127.0.0.1:{port}",
                 UseShellExecute = false,
                 RedirectStandardError = true,
@@ -659,7 +703,7 @@ internal sealed class SwitcherService
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("cloudflared.exe was not found. Install Cloudflare Tunnel, or put cloudflared.exe next to JagexSwitcher.exe.", ex);
+                throw new InvalidOperationException("Could not start cloudflared. Try deleting %APPDATA%\\jagex-account-switcher\\tools\\cloudflared.exe so the app can download a fresh copy.", ex);
             }
         }
 

@@ -51,22 +51,23 @@ Use this when your desktop already has a saved profile and you want to move it t
 Requirements:
 
 - Both PCs need `JagexSwitcher.exe`.
-- The sending PC needs `cloudflared.exe` in `PATH`, or in the same folder as `JagexSwitcher.exe`.
-- The receiving PC does not need `cloudflared`.
+- The sending PC needs internet access the first time it sends.
+- The app downloads `cloudflared.exe` on first use and caches it under `%APPDATA%\jagex-account-switcher\tools\`.
 
 Sender:
 
 1. Select the saved profile.
 2. Click **Send Selected**.
 3. The app starts a local one-use HTTP transfer server.
-4. The app starts Cloudflare Tunnel with:
+4. The app downloads Cloudflare Tunnel if needed.
+5. The app starts Cloudflare Tunnel with:
 
 ```text
 cloudflared tunnel --url http://127.0.0.1:<random-port>
 ```
 
-5. The Pair URL and Pair code are copied to the clipboard.
-6. Keep the app open until the other PC imports it.
+6. The Pair URL and Pair code are copied to the clipboard.
+7. Keep the app open until the other PC imports it.
 
 Receiver:
 
@@ -94,6 +95,8 @@ The transfer stops after one successful import, after **Stop Share**, or when th
   credentials\
     main.properties
     alt.properties
+  tools\
+    cloudflared.exe      # downloaded on first pair send
 ```
 
 Vault lives outside this git repo. Windows user ACL only.
