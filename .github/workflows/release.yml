@@ -32,9 +32,14 @@ jobs:
           dotnet publish app/JagexSwitcher.App/JagexSwitcher.App.csproj `
             -c Release `
             -r win-x64 `
-            --self-contained false `
+            --self-contained true `
             -p:Version=$env:VERSION `
             -o publish
+
+      - name: Self-check
+        shell: pwsh
+        run: |
+          publish/JagexSwitcher.exe --self-check
 
       - name: Create release
         shell: pwsh
@@ -45,4 +50,4 @@ jobs:
           gh release create $tag publish/JagexSwitcher.exe `
             --target $env:GITHUB_SHA `
             --title "Jagex Switcher $tag" `
-            --notes "Automated release for $env:GITHUB_SHA"
+            --notes "Self-contained Windows build with guided profile capture, split pair transfer, DPAPI-encrypted vault credentials, profile rename, and startup theme/accessibility polish. Commit: $env:GITHUB_SHA"

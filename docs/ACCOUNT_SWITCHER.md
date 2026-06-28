@@ -16,6 +16,8 @@ RuneLite can write a session file after you log in through the Jagex Launcher:
 
 That file holds the `JX_*` values RuneLite needs to log in without a password prompt. The switcher keeps **one copy per profile** and, on `play`, starts RuneLite with that profile's `JX_*` values in the process environment.
 
+Saved vault credential files are encrypted with Windows DPAPI for the current Windows user. Older plaintext vault files can still be read and are rewritten encrypted when re-imported.
+
 We do **not** copy `%LOCALAPPDATA%\Jagex Launcher\` — the launcher rejects restored OAuth snapshots on current versions.
 
 More background: [LAUNCH_AND_LOGIN.md](LAUNCH_AND_LOGIN.md).
@@ -31,6 +33,8 @@ Use the Windows app's **Add Account** button for the guided path. It:
 3. Opens Jagex Launcher.
 4. Waits for RuneLite to start while Jagex Launcher is still running.
 5. Imports the captured profile when RuneLite writes credentials.
+
+The profile name field is optional. If left blank, the app uses the captured character display name and adds a suffix when needed.
 
 If `osclient.exe` starts, the app stops and asks you to choose RuneLite instead.
 
@@ -57,7 +61,7 @@ Requirements:
 Sender:
 
 1. Select the saved profile.
-2. Click **Send Selected**.
+2. Open Pair Transfer -> **Send** and click **Create Pair**.
 3. The app starts a local one-use HTTP transfer server.
 4. The app downloads Cloudflare Tunnel if needed.
 5. The app starts Cloudflare Tunnel with:
@@ -71,9 +75,10 @@ cloudflared tunnel --url http://127.0.0.1:<random-port>
 
 Receiver:
 
-1. Paste the Pair URL and Pair code into the app.
-2. Optional: enter a profile name to rename it on this PC.
-3. Click **Receive Pair**.
+1. Open Pair Transfer -> **Receive**.
+2. Paste the Pair URL and Pair code into the app.
+3. Optional: enter a profile name to rename it on this PC.
+4. Click **Receive Pair**.
 
 The transfer stops after one successful import, after **Stop Share**, or when the sender app closes. The random `trycloudflare.com` URL is not treated as secret by itself; the receiver must also send the 8-digit pairing code.
 
@@ -93,13 +98,13 @@ The transfer stops after one successful import, after **Stop Share**, or when th
 %APPDATA%\jagex-account-switcher\
   profiles.json          # profile names, display names — no secrets
   credentials\
-    main.properties
+    main.properties      # DPAPI-encrypted session values
     alt.properties
   tools\
     cloudflared.exe      # downloaded on first pair send
 ```
 
-Vault lives outside this git repo. Windows user ACL only.
+Vault lives outside this git repo. Credential files are DPAPI-encrypted for the current Windows user.
 
 ---
 
@@ -121,7 +126,7 @@ Local build:
 
 Releases are built by GitHub Actions on every push to `main`.
 
-The app publish is framework-dependent, so the target PC needs the .NET 8 Desktop Runtime installed.
+The app publish is self-contained, so the target PC does not need a separate .NET Desktop Runtime install.
 
 Launch: `%LOCALAPPDATA%\RuneLite\RuneLite.exe` with vault creds passed as process environment variables. Normal play does not overwrite `.runelite\credentials.properties`.
 
@@ -132,6 +137,7 @@ Launch: `%LOCALAPPDATA%\RuneLite\RuneLite.exe` with vault creds passed as proces
 - Never commit `credentials.properties` or vault files.
 - Never log or print `JX_*` token values.
 - Do not share credential files; treat like passwords.
+- Vault credentials are encrypted with Windows DPAPI for the current Windows user.
 - Sessions expire; re-login through Jagex Launcher once and re-import.
 - No Jagex password storage in the switcher.
 - Capture is turned off automatically before normal Play. Advanced settings can leave it on for debugging.
@@ -150,7 +156,7 @@ Launch: `%LOCALAPPDATA%\RuneLite\RuneLite.exe` with vault creds passed as proces
 
 ## Status
 
-C# app: profile list, guided Add Account, Add Current, Play, Remove, Refresh, pair transfer, and advanced capture controls.
+C# app: profile list, guided Add Account, Add Current, Play, Rename, Remove, Refresh, DPAPI vault storage, pair transfer, and advanced capture controls.
 
 ---
 

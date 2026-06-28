@@ -17,6 +17,7 @@ internal sealed class SwitcherService
 {
     private const string CaptureFlag = "--insecure-write-credentials";
     private const string CloudflaredDownloadUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe";
+    private const string EncryptedCredentialsPrefix = "JagexSwitcher-DPAPI:v1\n";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -52,6 +53,8 @@ internal sealed class SwitcherService
     private string ToolsDir => Path.Combine(vaultRoot, "tools");
     private string ProfilesFile => Path.Combine(vaultRoot, "profiles.json");
 
+    public string GetVaultRoot() => vaultRoot;
+
     public IReadOnlyList<ProfileInfo> GetProfiles()
     {
         var data = ReadProfiles();
@@ -61,20 +64,27 @@ internal sealed class SwitcherService
             .Select(profile => new ProfileInfo(
                 profile.Key,
                 profile.Value.DisplayName ?? "",
-                profile.Value.ImportedAt ?? ""))
+                profile.Value.ImportedAt ?? "",
+                profile.Value.LastPlayedAt ?? "",
+                GetCredentialStatus(profile.Key)))
             .ToList();
     }
 
-    public void Import(string profileName)
+    public string Import(string profileName)
     {
-        AssertProfileName(profileName);
-
         if (!File.Exists(liveCreds))
         {
             throw new InvalidOperationException($"No live credentials at {liveCreds}. Log in via Jagex Launcher -> RuneLite first.");
         }
 
-        SaveProfileCredentials(profileName, File.ReadAllText(liveCreds));
+        var credentials = File.ReadAllText(liveCreds);
+        var displayName = GetJxDisplayNameFromText(credentials);
+        var data = ReadProfiles();
+        var resolvedName = !string.IsNullOrWhiteSpace(profileName) && data.Profiles.ContainsKey(profileName)
+            ? data.Profiles.Keys.First(key => string.Equals(key, profileName, StringComparison.OrdinalIgnoreCase))
+            : ResolveAvailableProfileName(string.IsNullOrWhiteSpace(profileName) ? displayName ?? "" : profileName);
+        SaveProfileCredentials(resolvedName, credentials);
+        return resolvedName;
     }
 
     public void Play(string profileName)
@@ -93,7 +103,59 @@ internal sealed class SwitcherService
             throw new InvalidOperationException($"Vault credentials missing for '{profileName}'. Re-import after logging in.");
         }
 
-        StartRuneLite(ParseJxEnvironment(File.ReadLines(vaultPath)));
+        StartRuneLite(ParseJxEnvironment(ReadCredentialLines(vaultPath)));
+        data.Profiles[profileName].LastPlayedAt = DateTimeOffset.Now.ToString("o");
+        SaveProfiles(data);
+    }
+
+    public void RenameProfile(string oldName, string newName)
+    {
+        AssertProfileName(oldName);
+        AssertProfileName(newName);
+
+        var data = ReadProfiles();
+        if (!data.Profiles.TryGetValue(oldName, out var metadata))
+        {
+            throw new InvalidOperationException($"Unknown profile '{oldName}'.");
+        }
+
+        if (!string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase) && data.Profiles.ContainsKey(newName))
+        {
+            throw new InvalidOperationException($"Profile '{newName}' already exists.");
+        }
+
+        var oldPath = GetVaultCredPath(oldName);
+        var newPath = GetVaultCredPath(newName);
+        if (File.Exists(newPath) && !string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Vault credentials already exist for '{newName}'.");
+        }
+
+        if (File.Exists(oldPath) && !string.Equals(oldPath, newPath, StringComparison.Ordinal))
+        {
+            Directory.CreateDirectory(CredsDir);
+            if (string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
+            {
+                var tempPath = oldPath + ".rename";
+                File.Move(oldPath, tempPath, overwrite: true);
+                File.Move(tempPath, newPath, overwrite: true);
+            }
+            else
+            {
+                File.Move(oldPath, newPath);
+            }
+        }
+
+        data.Profiles.Remove(oldName);
+        data.Profiles[newName] = metadata;
+        SaveProfiles(data);
+    }
+
+    public string ResolveAvailableProfileName(string desiredName)
+    {
+        return ResolveAvailableProfileName(
+            desiredName,
+            ReadProfiles().Profiles.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase));
     }
 
     public void Remove(string profileName)
@@ -115,6 +177,19 @@ internal sealed class SwitcherService
         SaveProfiles(data);
     }
 
+    public void ForgetAllProfiles()
+    {
+        if (Directory.Exists(CredsDir))
+        {
+            Directory.Delete(CredsDir, recursive: true);
+        }
+
+        if (File.Exists(ProfilesFile))
+        {
+            File.Delete(ProfilesFile);
+        }
+    }
+
     public async Task<PairTransferSession> StartPairTransferAsync(string profileName)
     {
         AssertProfileName(profileName);
@@ -131,7 +206,7 @@ internal sealed class SwitcherService
             throw new InvalidOperationException($"Vault credentials missing for '{profileName}'. Re-import after logging in.");
         }
 
-        var credentials = File.ReadAllText(vaultPath);
+        var credentials = ReadVaultCredentials(vaultPath);
         var displayName = GetJxDisplayNameFromText(credentials);
         if (string.IsNullOrWhiteSpace(displayName))
         {
@@ -192,7 +267,9 @@ internal sealed class SwitcherService
             throw new InvalidOperationException("Pair transfer returned no credentials.");
         }
 
-        var importedName = string.IsNullOrWhiteSpace(profileName) ? package.ProfileName?.Trim() : profileName.Trim();
+        var importedName = ResolveAvailableProfileName(string.IsNullOrWhiteSpace(profileName)
+            ? string.IsNullOrWhiteSpace(package.DisplayName) ? package.ProfileName : package.DisplayName
+            : profileName);
         if (string.IsNullOrWhiteSpace(importedName))
         {
             throw new InvalidOperationException("Pair transfer returned no profile name. Enter a profile name and try again.");
@@ -294,13 +371,16 @@ internal sealed class SwitcherService
         var env = ParseJxEnvironment(new[]
         {
             "JX_DISPLAY_NAME=SelfCheck",
+            "JX_SESSION_ID=session",
+            "JX_CHARACTER_ID=character",
             "JX_ACCESS_TOKEN=abc=123",
+            "JX_REFRESH_TOKEN=refresh",
             "NOT_JX=ignored",
             "JX_EMPTY=",
             "# comment"
         });
 
-        if (env.Count != 3 ||
+        if (env.Count != 6 ||
             env["JX_DISPLAY_NAME"] != "SelfCheck" ||
             env["JX_ACCESS_TOKEN"] != "abc=123" ||
             env["JX_EMPTY"] != "")
@@ -317,6 +397,20 @@ internal sealed class SwitcherService
             PairEndpointFromUrl("https://example.trycloudflare.com").ToString() != "https://example.trycloudflare.com/pair")
         {
             throw new InvalidOperationException("Pair transfer self-check failed.");
+        }
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Main", "SelfCheck" };
+        if (ResolveAvailableProfileName("Self Check", names) != "SelfCheck_2" ||
+            ResolveAvailableProfileName("", names) != "Profile")
+        {
+            throw new InvalidOperationException("Profile name resolution self-check failed.");
+        }
+
+        var protectedBytes = ProtectedData.Protect(Encoding.UTF8.GetBytes("dpapi"), null, DataProtectionScope.CurrentUser);
+        var unprotected = Encoding.UTF8.GetString(ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser));
+        if (unprotected != "dpapi")
+        {
+            throw new InvalidOperationException("DPAPI self-check failed.");
         }
     }
 
@@ -401,13 +495,15 @@ internal sealed class SwitcherService
         }
 
         Directory.CreateDirectory(CredsDir);
-        File.WriteAllText(GetVaultCredPath(profileName), credentials);
+        WriteVaultCredentials(GetVaultCredPath(profileName), credentials);
 
         var data = ReadProfiles();
+        data.Profiles.TryGetValue(profileName, out var existing);
         data.Profiles[profileName] = new ProfileMetadata
         {
             DisplayName = displayName,
-            ImportedAt = DateTimeOffset.Now.ToString("o")
+            ImportedAt = DateTimeOffset.Now.ToString("o"),
+            LastPlayedAt = existing?.LastPlayedAt
         };
         SaveProfiles(data);
     }
@@ -503,6 +599,54 @@ internal sealed class SwitcherService
         return Path.Combine(CredsDir, $"{profileName}.properties");
     }
 
+    private string GetCredentialStatus(string profileName)
+    {
+        var vaultPath = GetVaultCredPath(profileName);
+        if (!File.Exists(vaultPath))
+        {
+            return "Missing credentials";
+        }
+
+        try
+        {
+            _ = ParseJxEnvironment(ReadCredentialLines(vaultPath));
+            return "Ready";
+        }
+        catch
+        {
+            return "Needs re-import";
+        }
+    }
+
+    private static IEnumerable<string> ReadCredentialLines(string path)
+    {
+        using var reader = new StringReader(ReadVaultCredentials(path));
+        while (reader.ReadLine() is { } line)
+        {
+            yield return line;
+        }
+    }
+
+    private static string ReadVaultCredentials(string path)
+    {
+        var raw = File.ReadAllText(path);
+        if (!raw.StartsWith(EncryptedCredentialsPrefix, StringComparison.Ordinal))
+        {
+            return raw;
+        }
+
+        var protectedBytes = Convert.FromBase64String(raw[EncryptedCredentialsPrefix.Length..].Trim());
+        var bytes = ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser);
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    private static void WriteVaultCredentials(string path, string credentials)
+    {
+        var bytes = Encoding.UTF8.GetBytes(credentials);
+        var protectedBytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
+        File.WriteAllText(path, EncryptedCredentialsPrefix + Convert.ToBase64String(protectedBytes));
+    }
+
     private static string? GetJxDisplayName(string path)
     {
         return GetJxDisplayNameFromText(File.ReadAllText(path));
@@ -569,12 +713,38 @@ internal sealed class SwitcherService
             result[line[..equals]] = line[(equals + 1)..];
         }
 
-        if (!result.ContainsKey("JX_DISPLAY_NAME"))
+        var required = new[]
         {
-            throw new InvalidOperationException("Vault credentials file has no JX_DISPLAY_NAME=. Re-import this profile.");
+            "JX_DISPLAY_NAME",
+            "JX_SESSION_ID",
+            "JX_CHARACTER_ID",
+            "JX_ACCESS_TOKEN",
+            "JX_REFRESH_TOKEN"
+        };
+        var missing = required.Where(key => !result.ContainsKey(key)).ToList();
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException($"Vault credentials missing {string.Join(", ", missing)}. Re-import this profile.");
         }
 
         return result;
+    }
+
+    private static string ResolveAvailableProfileName(string desiredName, ISet<string> existing)
+    {
+        var baseName = Regex.Replace(desiredName.Trim(), "[^A-Za-z0-9_-]+", "");
+        if (string.IsNullOrWhiteSpace(baseName))
+        {
+            baseName = "Profile";
+        }
+
+        var name = baseName;
+        for (var suffix = 2; existing.Contains(name); suffix++)
+        {
+            name = $"{baseName}_{suffix}";
+        }
+
+        return name;
     }
 
     private static void AssertProfileName(string profileName)
@@ -603,6 +773,9 @@ internal sealed class SwitcherService
 
         [JsonPropertyName("importedAt")]
         public string? ImportedAt { get; set; }
+
+        [JsonPropertyName("lastPlayedAt")]
+        public string? LastPlayedAt { get; set; }
     }
 
     private sealed class PairRequest
