@@ -35,6 +35,7 @@ Every push to `main` builds a fresh `JagexSwitcher.exe` and attaches it to a new
 Use `Add Account` in the app to enable capture, open Jagex Launcher, wait for a Jagex-launched RuneLite session, and import the captured character. Profile name is optional; blank uses the captured character name.
 Use `Add Current` only when RuneLite has already written a valid Jagex `credentials.properties` file.
 Capture/debug controls live behind `Advanced settings`. Normal `Play` turns capture off automatically before launching.
+Keyboard: `Enter` play, `F5` refresh, `F2` rename, `Del` remove, `Esc` cancel Add Account. Right-click a profile for the same actions.
 
 Use Pair Transfer -> `Send` on the PC that already has the profile, then paste the copied Pair URL and Pair code into `Receive` on the other PC. The receiving name is optional; blank uses the sent character/profile name.
 
