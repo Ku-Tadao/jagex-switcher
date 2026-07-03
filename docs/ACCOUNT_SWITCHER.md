@@ -81,6 +81,7 @@ Receiver:
 4. Click **Receive Pair**.
 
 The transfer stops after one successful import, after **Stop Share**, or when the sender app closes. The random `trycloudflare.com` URL is not treated as secret by itself; the receiver must also send the 8-digit pairing code.
+The share also expires automatically after 15 minutes and after five wrong code attempts.
 
 ---
 
@@ -141,7 +142,9 @@ Launch: `%LOCALAPPDATA%\RuneLite\RuneLite.exe` with vault creds passed as proces
 - Sessions expire; re-login through Jagex Launcher once and re-import.
 - No Jagex password storage in the switcher.
 - Capture is turned off automatically before normal Play. Advanced settings can leave it on for debugging.
+- After a successful Add Account, capture mode is turned off and the live `credentials.properties` dump is deleted automatically.
 - Pair transfer sends a saved session to another PC. Only use it with devices you control, and stop sharing once imported.
+- Pair transfer closes itself after one import, five failed code attempts, 15 minutes, or Stop Share. Pair URLs must be https.
 
 ---
 

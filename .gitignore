@@ -1,6 +1,8 @@
 # Local secrets and credential vault copies (never commit)
 .local/
 *.local.json
+.env
+scripts/.env
 
 # RuneLite credential snapshots if stored in-repo during dev
 *.credentials.properties

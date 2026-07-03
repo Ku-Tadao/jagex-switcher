@@ -50,4 +50,4 @@ jobs:
           gh release create $tag publish/JagexSwitcher.exe `
             --target $env:GITHUB_SHA `
             --title "Jagex Switcher $tag" `
-            --notes "Self-contained Windows build with guided profile capture, split pair transfer, DPAPI-encrypted vault credentials, profile rename, and startup theme/accessibility polish. Commit: $env:GITHUB_SHA"
+            --notes "Self-contained Windows build. Adds single-instance guard, keyboard shortcuts (F5/F2/Del/Enter/Esc) and right-click menu, Last played + Status columns, hardened pair transfer (fixed-time code check, 5-attempt limit, 15-minute expiry, https-only URLs), atomic vault writes, and automatic capture cleanup after Add Account. Commit: $env:GITHUB_SHA"
