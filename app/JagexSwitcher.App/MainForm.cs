@@ -28,6 +28,7 @@ internal sealed class MainForm : Form
 
     private const int RightColumnWidth = 360;
     private const int RightContentWidth = 296;
+    private const int StatusColumnIndex = 4;
 
     private readonly SwitcherService switcher;
     private readonly ListView profileList = new();
@@ -45,8 +46,11 @@ internal sealed class MainForm : Form
     private readonly TextBox pairCodeBox = new();
     private readonly TextBox receiveNameBox = new();
     private readonly System.Windows.Forms.Timer addAccountTimer = new();
+    private readonly HashSet<Control> persistentControls;
     private PairMode pairMode = PairMode.Send;
     private bool addAccountActive;
+    private bool busy;
+    private int captureStableTicks;
     private string? pendingProfileName;
     private SwitcherService.PairTransferSession? activePairTransfer;
     private readonly HashSet<int> hoverRepaintedRows = new();
@@ -58,7 +62,10 @@ internal sealed class MainForm : Form
     {
         this.switcher = switcher;
 
-        Text = "Jagex Switcher";
+        var version = typeof(MainForm).Assembly.GetName().Version;
+        Text = version is null || (version.Major == 0 && version.Minor == 0 && version.Build == 0)
+            ? "Jagex Switcher"
+            : $"Jagex Switcher v{version.ToString(3)}";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(860, 560);
         Size = new Size(1040, 720);
@@ -66,11 +73,28 @@ internal sealed class MainForm : Form
         Font = BodyFont;
         ForeColor = TextColor;
         DoubleBuffered = true;
+        KeyPreview = true;
+        KeyDown += OnFormKeyDown;
+
+        profileNameBox.PlaceholderText = "Blank uses character name";
+        receiveNameBox.PlaceholderText = "Blank uses sent name";
+        pairUrlBox.PlaceholderText = "https://....trycloudflare.com";
+        pairCodeBox.PlaceholderText = "8-digit code";
+
+        persistentControls = new HashSet<Control>
+        {
+            profileNameBox, renameProfileBox, pairUrlBox, pairCodeBox,
+            receiveNameBox, addStepLabel, advancedSettingsBox, advancedPanel
+        };
 
         BuildLayout();
         addAccountTimer.Interval = 1000;
         addAccountTimer.Tick += (_, _) => WatchAddAccount();
-        FormClosed += (_, _) => activePairTransfer?.Dispose();
+        FormClosed += (_, _) =>
+        {
+            addAccountTimer.Dispose();
+            activePairTransfer?.Dispose();
+        };
         RefreshProfiles();
     }
 
@@ -130,10 +154,97 @@ internal sealed class MainForm : Form
         profileList.MouseMove += OnProfileListMouseMove;
         profileList.Invalidated += OnProfileListInvalidated;
         profileList.DoubleClick += (_, _) => PlaySelected();
-        profileList.Columns.Add("Profile", 150);
-        profileList.Columns.Add("Character", 170);
-        profileList.Columns.Add("Imported", 170);
-        profileList.Columns.Add("");
+        profileList.ContextMenuStrip = BuildProfileContextMenu();
+
+        typeof(Control)
+            .GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            ?.SetValue(profileList, true);
+
+        profileList.Columns.Add("Profile", 140);
+        profileList.Columns.Add("Character", 150);
+        profileList.Columns.Add("Imported", 120);
+        profileList.Columns.Add("Last played", 120);
+        profileList.Columns.Add("Status", 100);
+    }
+
+    private ContextMenuStrip BuildProfileContextMenu()
+    {
+        var menu = new ContextMenuStrip
+        {
+            BackColor = Surface,
+            ForeColor = TextColor,
+            ShowImageMargin = false
+        };
+        menu.Items.Add("Play", null, (_, _) => PlaySelected());
+        menu.Items.Add("Re-import", null, (_, _) =>
+        {
+            var name = SelectedProfileName();
+            if (name is not null)
+            {
+                ImportCurrent(name);
+            }
+        });
+        menu.Items.Add("Rename  (F2)", null, (_, _) => FocusRenameBox());
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Open vault folder", null, (_, _) => OpenVaultFolder());
+        var remove = new ToolStripMenuItem("Remove  (Del)", null, (_, _) => RemoveSelected())
+        {
+            ForeColor = Danger
+        };
+        menu.Items.Add(remove);
+        menu.Opening += (_, e) => e.Cancel = addAccountActive || busy || SelectedProfile() is null;
+        return menu;
+    }
+
+    private void OnFormKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (busy)
+        {
+            return;
+        }
+
+        if (addAccountActive)
+        {
+            if (e.KeyCode == Keys.Escape)
+            {
+                StopAddAccount("Account add cancelled.");
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        switch (e.KeyCode)
+        {
+            case Keys.F5:
+                RefreshProfiles();
+                e.Handled = true;
+                break;
+            case Keys.F2 when SelectedProfile() is not null:
+                FocusRenameBox();
+                e.Handled = true;
+                break;
+            case Keys.Delete when profileList.Focused && SelectedProfile() is not null:
+                RemoveSelected();
+                e.Handled = true;
+                break;
+            case Keys.Enter when profileList.Focused && SelectedProfile() is not null:
+                PlaySelected();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                break;
+        }
+    }
+
+    private void FocusRenameBox()
+    {
+        if (renameProfileBox.Parent is null)
+        {
+            return;
+        }
+
+        renameProfileBox.Focus();
+        renameProfileBox.SelectAll();
     }
 
     private void BuildEmptyPanel()
@@ -265,7 +376,7 @@ internal sealed class MainForm : Form
     private void RenderActions()
     {
         actions.SuspendLayout();
-        actions.Controls.Clear();
+        ClearActions();
 
         if (addAccountActive)
         {
@@ -280,6 +391,19 @@ internal sealed class MainForm : Form
 
         actions.ResumeLayout();
         UpdateCaptureStatus();
+    }
+
+    private void ClearActions()
+    {
+        for (var i = actions.Controls.Count - 1; i >= 0; i--)
+        {
+            var control = actions.Controls[i];
+            actions.Controls.RemoveAt(i);
+            if (!persistentControls.Contains(control))
+            {
+                control.Dispose();
+            }
+        }
     }
 
     private void RenderAddFlow()
@@ -358,7 +482,7 @@ internal sealed class MainForm : Form
                 return;
             }
 
-            actions.Controls.Add(InfoLabel("Sends a saved session to another PC you control. Keep this app open until import finishes."));
+            actions.Controls.Add(InfoLabel("Sends a saved session to another PC you control. The share allows one import, then closes. It also expires after 15 minutes."));
 
             if (activePairTransfer is null)
             {
@@ -653,23 +777,31 @@ internal sealed class MainForm : Form
             return;
         }
 
+        var textColor = e.Item.Selected && HighContrast ? SystemColors.HighlightText : TextColor;
+        if (e.ColumnIndex == StatusColumnIndex &&
+            !string.Equals(e.SubItem.Text, "Ready", StringComparison.Ordinal) &&
+            !string.IsNullOrEmpty(e.SubItem.Text))
+        {
+            textColor = Danger;
+        }
+
         TextRenderer.DrawText(
             e.Graphics,
             e.SubItem.Text,
             BodyFont,
             e.Bounds,
-            TextColor,
+            textColor,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.LeftAndRightPadding);
     }
 
     private void RefreshProfiles()
     {
-        RunAction(LoadProfiles);
+        RunAction(() => LoadProfiles());
     }
 
-    private void LoadProfiles()
+    private void LoadProfiles(string? selectName = null)
     {
-        var previousSelection = SelectedProfileName();
+        var targetSelection = selectName ?? SelectedProfileName();
         profileList.BeginUpdate();
         try
         {
@@ -680,6 +812,8 @@ internal sealed class MainForm : Form
                 var item = new ListViewItem(profile.Name);
                 item.SubItems.Add(string.IsNullOrWhiteSpace(profile.DisplayName) ? "-" : profile.DisplayName);
                 item.SubItems.Add(FormatTimestamp(profile.ImportedAt));
+                item.SubItems.Add(FormatTimestamp(profile.LastPlayedAt));
+                item.SubItems.Add(profile.CredentialStatus);
                 item.Tag = profile;
                 profileList.Items.Add(item);
             }
@@ -688,10 +822,11 @@ internal sealed class MainForm : Form
             {
                 var selected = profileList.Items
                     .Cast<ListViewItem>()
-                    .FirstOrDefault(item => string.Equals((item.Tag as ProfileInfo)?.Name, previousSelection, StringComparison.OrdinalIgnoreCase))
+                    .FirstOrDefault(item => string.Equals((item.Tag as ProfileInfo)?.Name, targetSelection, StringComparison.OrdinalIgnoreCase))
                     ?? profileList.Items[0];
                 selected.Selected = true;
                 selected.Focused = true;
+                selected.EnsureVisible();
             }
 
             emptyPanel.Visible = profiles.Count == 0;
@@ -720,7 +855,7 @@ internal sealed class MainForm : Form
 
             var importedName = switcher.Import(profileName);
             profileNameBox.Clear();
-            LoadProfiles();
+            LoadProfiles(importedName);
             SetStatus($"Imported profile '{importedName}'.");
         });
     }
@@ -748,6 +883,7 @@ internal sealed class MainForm : Form
             }
 
             addAccountActive = true;
+            captureStableTicks = 0;
             pendingProfileName = profileName;
             SetAddStep("Opening Jagex Launcher...");
             switcher.BeginAddAccount();
@@ -797,14 +933,21 @@ internal sealed class MainForm : Form
 
             if (!switcher.HasCapturedCredentials())
             {
+                captureStableTicks = 0;
                 SetAddStep("RuneLite detected. Waiting for captured credentials...");
                 return;
             }
 
-            var importedName = switcher.Import(pendingProfileName);
+            if (++captureStableTicks < 2)
+            {
+                SetAddStep("Credentials detected. Verifying...");
+                return;
+            }
+
+            var importedName = switcher.CompleteAddAccount(pendingProfileName);
             profileNameBox.Clear();
-            LoadProfiles();
-            StopAddAccount($"Added profile '{importedName}'.");
+            LoadProfiles(importedName);
+            StopAddAccount($"Added profile '{importedName}'. Capture mode turned off.");
         }
         catch (Exception ex)
         {
@@ -817,6 +960,7 @@ internal sealed class MainForm : Form
     {
         addAccountTimer.Stop();
         addAccountActive = false;
+        captureStableTicks = 0;
         pendingProfileName = null;
         RenderActions();
 
@@ -848,6 +992,7 @@ internal sealed class MainForm : Form
             }
 
             switcher.Play(profileName);
+            LoadProfiles(profileName);
             SetStatus($"Playing profile '{profileName}'.");
         });
     }
@@ -882,10 +1027,16 @@ internal sealed class MainForm : Form
         }
 
         var newName = renameProfileBox.Text.Trim();
+        if (string.Equals(profileName, newName, StringComparison.Ordinal))
+        {
+            SetStatus("Name unchanged.");
+            return;
+        }
+
         RunAction(() =>
         {
             switcher.RenameProfile(profileName, newName);
-            LoadProfiles();
+            LoadProfiles(newName);
             SetStatus($"Renamed profile '{profileName}' to '{newName}'.");
         });
     }
@@ -941,16 +1092,16 @@ internal sealed class MainForm : Form
             activePairTransfer?.Dispose();
             activePairTransfer = null;
             pairMode = PairMode.Send;
-            SetStatus("Preparing Cloudflare tunnel...");
+            SetStatus("Preparing Cloudflare tunnel (first use downloads cloudflared)...");
             RenderActions();
 
             var session = await switcher.StartPairTransferAsync(profileName);
             activePairTransfer = session;
-            session.Completed += () => BeginInvoke((Action)(() =>
+            session.Closed += reason => BeginInvoke((Action)(() =>
             {
                 if (activePairTransfer == session)
                 {
-                    StopPairTransfer("Pair transfer completed.");
+                    StopPairTransfer(reason);
                 }
             }));
 
@@ -970,11 +1121,12 @@ internal sealed class MainForm : Form
 
         await RunActionAsync(async () =>
         {
+            SetStatus("Contacting sender...");
             var importedName = await switcher.ReceivePairAsync(pairUrl, pairCode, profileName);
             receiveNameBox.Clear();
             pairUrlBox.Clear();
             pairCodeBox.Clear();
-            LoadProfiles();
+            LoadProfiles(importedName);
             SetStatus($"Imported paired profile '{importedName}'.");
         });
     }
@@ -1040,6 +1192,13 @@ internal sealed class MainForm : Form
 
     private async Task RunActionAsync(Func<Task> action)
     {
+        if (busy)
+        {
+            return;
+        }
+
+        busy = true;
+        UseWaitCursor = true;
         try
         {
             await action();
@@ -1048,6 +1207,11 @@ internal sealed class MainForm : Form
         catch (Exception ex)
         {
             ShowError(ex.Message);
+        }
+        finally
+        {
+            busy = false;
+            UseWaitCursor = false;
         }
     }
 
