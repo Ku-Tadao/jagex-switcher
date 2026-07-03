@@ -87,6 +87,19 @@ internal sealed class SwitcherService
         return resolvedName;
     }
 
+    public string CompleteAddAccount(string profileName)
+    {
+        var importedName = Import(profileName);
+        SetCaptureEnabled(false);
+
+        if (File.Exists(liveCreds))
+        {
+            File.Delete(liveCreds);
+        }
+
+        return importedName;
+    }
+
     public void Play(string profileName)
     {
         AssertProfileName(profileName);
@@ -299,7 +312,24 @@ internal sealed class SwitcherService
 
     public bool HasCapturedCredentials()
     {
-        return File.Exists(liveCreds) && !string.IsNullOrWhiteSpace(GetJxDisplayName(liveCreds));
+        if (!File.Exists(liveCreds))
+        {
+            return false;
+        }
+
+        try
+        {
+            _ = ParseJxEnvironment(File.ReadAllLines(liveCreds));
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     public bool IsJagexLauncherRunning()
@@ -399,6 +429,22 @@ internal sealed class SwitcherService
             throw new InvalidOperationException("Pair transfer self-check failed.");
         }
 
+        var rejectedPlainHttp = false;
+        try
+        {
+            _ = PairEndpointFromUrl("http://example.com");
+        }
+        catch (InvalidOperationException)
+        {
+            rejectedPlainHttp = true;
+        }
+
+        if (!rejectedPlainHttp ||
+            PairEndpointFromUrl("http://127.0.0.1:9999").ToString() != "http://127.0.0.1:9999/pair")
+        {
+            throw new InvalidOperationException("Pair URL scheme self-check failed.");
+        }
+
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Main", "SelfCheck" };
         if (ResolveAvailableProfileName("Self Check", names) != "SelfCheck_2" ||
             ResolveAvailableProfileName("", names) != "Profile")
@@ -488,7 +534,8 @@ internal sealed class SwitcherService
     {
         AssertProfileName(profileName);
 
-        var displayName = GetJxDisplayNameFromText(credentials);
+        var env = ParseJxEnvironment(ReadLines(credentials));
+        var displayName = env["JX_DISPLAY_NAME"];
         if (string.IsNullOrWhiteSpace(displayName))
         {
             throw new InvalidOperationException("Credentials have no JX_DISPLAY_NAME=. Re-login with --insecure-write-credentials enabled.");
@@ -535,7 +582,7 @@ internal sealed class SwitcherService
             .ToDictionary(profile => profile.Key, profile => profile.Value, StringComparer.OrdinalIgnoreCase);
 
         var output = new ProfilesData { Profiles = ordered };
-        File.WriteAllText(ProfilesFile, JsonSerializer.Serialize(output, JsonOptions));
+        WriteAllTextAtomic(ProfilesFile, JsonSerializer.Serialize(output, JsonOptions));
     }
 
     private JsonObject ReadRuneLiteSettings()
@@ -572,7 +619,14 @@ internal sealed class SwitcherService
         }
 
         Directory.CreateDirectory(dir);
-        File.WriteAllText(runeLiteSettings, settings.ToJsonString(JsonOptions));
+        WriteAllTextAtomic(runeLiteSettings, settings.ToJsonString(JsonOptions));
+    }
+
+    private static void WriteAllTextAtomic(string path, string content)
+    {
+        var tempPath = path + ".tmp";
+        File.WriteAllText(tempPath, content);
+        File.Move(tempPath, path, overwrite: true);
     }
 
     private static List<string> GetClientArguments(JsonObject settings)
@@ -620,7 +674,12 @@ internal sealed class SwitcherService
 
     private static IEnumerable<string> ReadCredentialLines(string path)
     {
-        using var reader = new StringReader(ReadVaultCredentials(path));
+        return ReadLines(ReadVaultCredentials(path));
+    }
+
+    private static IEnumerable<string> ReadLines(string text)
+    {
+        using var reader = new StringReader(text);
         while (reader.ReadLine() is { } line)
         {
             yield return line;
@@ -644,12 +703,7 @@ internal sealed class SwitcherService
     {
         var bytes = Encoding.UTF8.GetBytes(credentials);
         var protectedBytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
-        File.WriteAllText(path, EncryptedCredentialsPrefix + Convert.ToBase64String(protectedBytes));
-    }
-
-    private static string? GetJxDisplayName(string path)
-    {
-        return GetJxDisplayNameFromText(File.ReadAllText(path));
+        WriteAllTextAtomic(path, EncryptedCredentialsPrefix + Convert.ToBase64String(protectedBytes));
     }
 
     private static string? GetJxDisplayNameFromText(string credentials)
@@ -684,6 +738,11 @@ internal sealed class SwitcherService
             (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
         {
             throw new InvalidOperationException("Enter the pair URL from the sending PC.");
+        }
+
+        if (uri.Scheme == Uri.UriSchemeHttp && !uri.IsLoopback)
+        {
+            throw new InvalidOperationException("Pair URL must use https.");
         }
 
         return new UriBuilder(uri)
@@ -798,6 +857,9 @@ internal sealed class SwitcherService
 
     internal sealed class PairTransferSession : IDisposable
     {
+        private const int MaxFailedAttempts = 5;
+        private static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(15);
+
         private static readonly Regex TunnelUrlPattern = new(
             "https://[a-z0-9-]+\\.trycloudflare\\.com",
             RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -809,6 +871,7 @@ internal sealed class SwitcherService
         private readonly CancellationTokenSource stop = new();
         private Process? cloudflared;
         private int disposed;
+        private int failedAttempts;
 
         public PairTransferSession(HttpListener listener, int port, string cloudflaredPath, PairTransferPackage package, string code)
         {
@@ -821,7 +884,7 @@ internal sealed class SwitcherService
 
         public string Code { get; }
         public string TunnelUrl { get; private set; } = "";
-        public event Action? Completed;
+        public event Action<string>? Closed;
 
         public async Task StartAsync()
         {
@@ -829,6 +892,18 @@ internal sealed class SwitcherService
 
             cloudflared = StartCloudflared(cloudflaredPath, port);
             TunnelUrl = await WaitForTunnelUrlAsync(cloudflared, stop.Token);
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(SessionTtl, stop.Token);
+                    Close("Pair transfer expired after 15 minutes. Create a new pair if you still need it.");
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            });
         }
 
         public void Dispose()
@@ -855,6 +930,17 @@ internal sealed class SwitcherService
 
             cloudflared?.Dispose();
             stop.Dispose();
+        }
+
+        private void Close(string reason)
+        {
+            if (disposed == 1)
+            {
+                return;
+            }
+
+            Dispose();
+            Closed?.Invoke(reason);
         }
 
         private static Process StartCloudflared(string cloudflaredPath, int port)
@@ -978,15 +1064,30 @@ internal sealed class SwitcherService
                 return;
             }
 
-            if (!string.Equals(pairRequest?.Code, Code, StringComparison.Ordinal))
+            if (!CodeMatches(pairRequest?.Code))
             {
+                var attempts = Interlocked.Increment(ref failedAttempts);
+                if (attempts >= MaxFailedAttempts)
+                {
+                    WriteHttp(response, 403, "Too many failed attempts. Pair share closed.", "text/plain; charset=utf-8");
+                    Close("Pair share closed after too many failed code attempts.");
+                    return;
+                }
+
+                Thread.Sleep(750);
                 WriteHttp(response, 403, "Pair code did not match.", "text/plain; charset=utf-8");
                 return;
             }
 
             WriteHttp(response, 200, JsonSerializer.Serialize(package, JsonOptions), "application/json; charset=utf-8");
-            Completed?.Invoke();
-            Dispose();
+            Close("Pair transfer completed.");
+        }
+
+        private bool CodeMatches(string? candidate)
+        {
+            var expected = Encoding.UTF8.GetBytes(Code);
+            var actual = Encoding.UTF8.GetBytes(candidate?.Trim() ?? "");
+            return actual.Length == expected.Length && CryptographicOperations.FixedTimeEquals(actual, expected);
         }
 
         private static void WriteHttp(HttpListenerResponse response, int statusCode, string body, string contentType)
