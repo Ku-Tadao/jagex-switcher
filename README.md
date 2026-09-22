@@ -9,6 +9,7 @@ Get the latest `JagexSwitcher.exe` from the private repo's Releases page:
 https://github.com/Ku-Tadao/jagex-switcher/releases/latest
 
 The app is a self-contained Windows executable. The target PC does not need a separate .NET install.
+Jagex Switcher uses the SignPath Foundation program for Windows code signing.
 Pair transfer downloads Cloudflare Tunnel on first use and caches it under `%APPDATA%\jagex-account-switcher\tools\`.
 
 ## App
@@ -29,6 +30,7 @@ Every push to `main` builds a fresh `JagexSwitcher.exe` and attaches it to a new
 |---|---|
 | [docs/ACCOUNT_SWITCHER.md](docs/ACCOUNT_SWITCHER.md) | **Start here** — setup, design, commands |
 | [docs/LAUNCH_AND_LOGIN.md](docs/LAUNCH_AND_LOGIN.md) | Background on Jagex login, launcher paths, OAuth |
+| [docs/PRIVACY.md](docs/PRIVACY.md) | Privacy policy |
 
 ## In short
 
