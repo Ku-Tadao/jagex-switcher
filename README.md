@@ -86,8 +86,6 @@ The packaged app is written to `dist/avalonia/JagexSwitcher.exe`. Publishing run
 Pushes to `main` run the [release workflow](.github/workflows/release.yml), check the app, and attach a self-contained executable to a new GitHub Release.
 
 - [Account setup and implementation details](docs/ACCOUNT_SWITCHER.md)
-- [Launcher and login background](docs/LAUNCH_AND_LOGIN.md)
-- [Avalonia migration, checks, and rollback](docs/VISUAL_OVERHAUL.md)
 
 ---
 
