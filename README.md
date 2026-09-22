@@ -1,50 +1,94 @@
-# jagex-switcher
+# Jagex Switcher
 
-Quick account switcher for OSRS / RuneLite on Windows, built with C# and Avalonia.
+**Your characters. One place to play.**
 
-## Download
+A Windows account switcher for Old School RuneScape and RuneLite. Save a profile for each character, find the one you want, and launch RuneLite with its saved session.
 
-Get the latest `JagexSwitcher.exe` from the private repo's Releases page:
+[Download the latest release](https://github.com/Ku-Tadao/jagex-switcher/releases/latest) · [Setup guide](docs/ACCOUNT_SWITCHER.md) · [Privacy](docs/PRIVACY.md)
 
-https://github.com/Ku-Tadao/jagex-switcher/releases/latest
+![Jagex Switcher showing sample character profiles and the Play in RuneLite button](docs/assets/launcher.png)
 
-The app is a self-contained Windows executable. The target PC does not need a separate .NET install.
-Jagex Switcher uses the SignPath Foundation program for Windows code signing.
-Pair transfer downloads Cloudflare Tunnel on first use and caches it under `%APPDATA%\jagex-account-switcher\tools\`.
+*Sample accounts shown. Built with C# and Avalonia, with dark, light, and Windows high-contrast support.*
 
-## App
+## What it does
 
-Open `JagexSwitcher.sln` in Visual Studio.
+- **Switch characters:** searchable profiles with character names, session status, and last-played timestamps.
+- **Capture once:** guided setup through Jagex Launcher saves the character you launch in RuneLite.
+- **Keep sessions local:** saved credentials are encrypted for your Windows user account.
+- **Move to another PC:** optional pairing transfers one profile using a temporary URL and an eight-digit code.
+- **Stay in control:** rename, re-import, or remove profiles, with confirmation before deletion.
 
-Rebuild the single exe:
+## Get started
+
+You need **Windows x64**, **Jagex Launcher**, and **RuneLite** installed for the same Windows user. The release is a self-contained executable, so no separate .NET installation is required. Downloads require repository access while this project is private.
+
+1. Download `JagexSwitcher.exe` from [Releases](https://github.com/Ku-Tadao/jagex-switcher/releases/latest) and run it.
+2. Close any running RuneLite or official game client, then choose **Add Account**.
+3. Optionally name the profile and select **Open launcher & capture**.
+4. Sign in through Jagex Launcher, select your character, and launch **RuneLite**. Keep Jagex Launcher open while capture completes.
+5. Once the profile appears, select it and choose **Play in RuneLite** for future launches.
+
+Repeat capture for each character. A blank profile name uses the captured character name. **Add Current** imports an existing RuneLite credential file without starting guided capture.
+
+Saved sessions can expire. If a profile stops working, sign in through Jagex Launcher again and re-import it. The switcher does not store your Jagex password or replace the official sign-in process.
+
+## Transfer a profile
+
+1. On the sending PC, select a profile and open **Transfer > Send > Create secure pair**.
+2. On the other PC, open **Transfer > Receive**, paste the **Pair URL** and **Pair code**, and choose **Receive profile**.
+3. Keep the sending app open until the import finishes.
+
+Both PCs need internet access. On first send, the app downloads Cloudflare's `cloudflared` helper and caches it locally. Sharing closes after one successful transfer, 15 minutes, five incorrect code attempts, **Stop sharing**, or app exit.
+
+Transfer sends session credentials over HTTPS through Cloudflare Tunnel. It is not end-to-end encrypted by the app. Treat the URL and code as sensitive and use this only between devices you control. The receiving PC encrypts the imported credentials for its own Windows user.
+
+## Storage and privacy
+
+The vault lives outside the application and repository:
 
 ```text
+%APPDATA%\jagex-account-switcher\
+  profiles.json       Profile names, character names, and timestamps
+  credentials\        Windows DPAPI-encrypted session files
+  tools\              Cloudflare Tunnel helper, downloaded on first send
+```
+
+Credential encryption is tied to your Windows user, so copying the vault to another PC is not a supported transfer method. Profile metadata is not encrypted.
+
+Guided capture temporarily enables RuneLite's credential export. After a successful capture, the app disables it and deletes the live export. Cancelling capture also disables export. Normal **Play** disables capture unless you explicitly keep it enabled in advanced settings.
+
+There is no app analytics service or developer-operated backend. See the [privacy policy](docs/PRIVACY.md) for local storage and optional network activity.
+
+## Keyboard shortcuts
+
+| Key | Action |
+| --- | --- |
+| Enter | Play the selected character from the profile list |
+| F5 | Refresh profiles |
+| F2 | Open profile management and rename |
+| Delete | Remove the selected profile after confirmation |
+| Escape | Close a dialog or cancel guided capture |
+
+Right-click a profile for play, management, re-import, and removal actions.
+
+## Build from source
+
+Use Windows and the .NET 8 SDK. Open `JagexSwitcher.sln` in Visual Studio, or run:
+
+```powershell
+dotnet build JagexSwitcher.sln -c Release
+dotnet run --project app/JagexSwitcher.VisualCheck -c Release -- .local/avalonia-check
 .\publish-app.cmd
 ```
 
-Every push to `main` builds a fresh `JagexSwitcher.exe` and attaches it to a new GitHub Release.
-Local builds go to `dist/avalonia/JagexSwitcher.exe`. Previous builds are preserved.
+The packaged app is written to `dist/avalonia/JagexSwitcher.exe`. Publishing runs the executable's service self-check and preserves previous local builds. The UI checks use isolated sample profiles and render screenshots without touching your real vault.
 
-Run the isolated UI and service checks with `dotnet run --project app/JagexSwitcher.VisualCheck -- .local/avalonia-check`.
+Pushes to `main` run the [release workflow](.github/workflows/release.yml), check the app, and attach a self-contained executable to a new GitHub Release.
 
-## Docs
+- [Account setup and implementation details](docs/ACCOUNT_SWITCHER.md)
+- [Launcher and login background](docs/LAUNCH_AND_LOGIN.md)
+- [Avalonia migration, checks, and rollback](docs/VISUAL_OVERHAUL.md)
 
-| File | What |
-|---|---|
-| [docs/ACCOUNT_SWITCHER.md](docs/ACCOUNT_SWITCHER.md) | **Start here** — setup, design, commands |
-| [docs/LAUNCH_AND_LOGIN.md](docs/LAUNCH_AND_LOGIN.md) | Background on Jagex login, launcher paths, OAuth |
-| [docs/PRIVACY.md](docs/PRIVACY.md) | Privacy policy |
-| [docs/VISUAL_OVERHAUL.md](docs/VISUAL_OVERHAUL.md) | Avalonia migration, verification, and rollback |
+---
 
-## In short
-
-Use `Add Account` in the app to enable capture, open Jagex Launcher, wait for a Jagex-launched RuneLite session, and import the captured character. Profile name is optional; blank uses the captured character name.
-Use `Add Current` only when RuneLite has already written a valid Jagex `credentials.properties` file.
-Capture/debug controls live in `Settings` → `Advanced capture controls`. Normal `Play` turns capture off automatically before launching unless `Keep capture enabled when playing` is checked. Cancelled guided capture turns capture off too.
-Keyboard: `Enter` play, `F5` refresh, `F2` rename, `Del` remove, `Esc` cancel Add Account. Right-click a profile for the same actions.
-
-Use `Transfer` → `Send` → `Create secure pair` on the PC that already has the profile, then paste the copied Pair URL and Pair code into `Receive` → `Receive profile` on the other PC. The receiving name is optional; blank uses the sent character/profile name.
-
-Vault (outside repo, credential files encrypted for the current Windows user): `%APPDATA%\jagex-account-switcher\`
-
-App source: `app\JagexSwitcher.App\`
+An independent project, not affiliated with or endorsed by Jagex or RuneLite. RuneScape and Old School RuneScape belong to Jagex. The landscape is original decorative artwork, not an official game screenshot.
