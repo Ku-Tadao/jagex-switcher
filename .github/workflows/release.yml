@@ -36,10 +36,15 @@ jobs:
             -p:Version=$env:VERSION `
             -o publish
 
-      - name: Self-check
+      - name: UI and service checks
+        shell: pwsh
+        run: dotnet run --project app/JagexSwitcher.VisualCheck -c Release -- .local/avalonia-check
+
+      - name: Published self-check
         shell: pwsh
         run: |
-          publish/JagexSwitcher.exe --self-check
+          $check = Start-Process -FilePath (Resolve-Path publish/JagexSwitcher.exe) -ArgumentList '--self-check' -WindowStyle Hidden -Wait -PassThru
+          if ($check.ExitCode -ne 0) { throw "Published self-check failed: $($check.ExitCode)" }
 
       - name: Create release
         shell: pwsh

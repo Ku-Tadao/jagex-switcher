@@ -5,4 +5,9 @@ internal sealed record ProfileInfo(
     string DisplayName,
     string ImportedAt,
     string LastPlayedAt = "",
-    string CredentialStatus = "");
+    string CredentialStatus = "")
+{
+    public string Initial => string.IsNullOrWhiteSpace(Name) ? "?" : Name[..1].ToUpperInvariant();
+    public bool IsReady => CredentialStatus == "Ready";
+    public override string ToString() => $"{Name}, {DisplayName}, {CredentialStatus}";
+}

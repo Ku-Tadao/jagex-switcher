@@ -1,3 +1,6 @@
+using Avalonia;
+using System.Runtime.InteropServices;
+
 namespace JagexSwitcher.App;
 
 internal static class Program
@@ -22,20 +25,15 @@ internal static class Program
         using var instanceLock = new Mutex(initiallyOwned: true, @"Local\JagexSwitcher.SingleInstance", out var createdNew);
         if (!createdNew)
         {
-            MessageBox.Show(
-                "Jagex Switcher is already running.",
-                "Jagex Switcher",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            MessageBox(IntPtr.Zero, "Jagex Switcher is already running.", "Jagex Switcher", 0x40);
             return 0;
         }
 
-        ApplicationConfiguration.Initialize();
-        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
-        Application.ThreadException += (_, e) =>
-            MessageBox.Show(e.Exception.Message, "Jagex Switcher", MessageBoxButtons.OK, MessageBoxIcon.Error);
-
-        Application.Run(new MainForm(new SwitcherService()));
-        return 0;
+        return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
+
+    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UsePlatformDetect();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "MessageBoxW")]
+    private static extern int MessageBox(IntPtr owner, string text, string caption, uint type);
 }

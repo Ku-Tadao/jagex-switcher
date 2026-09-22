@@ -2,7 +2,7 @@
 
 Switch between Jagex account characters on one Windows user by launching RuneLite with saved Jagex session values.
 
-**Last updated:** 2026-06-28
+**Last updated:** 2026-09-23
 
 ---
 
@@ -40,7 +40,7 @@ If `osclient.exe` starts, the app stops and asks you to choose RuneLite instead.
 
 Each Jagex character still needs its own capture. A Jagex account can hold multiple characters, but RuneLite writes the session for the character you actually launched.
 
-Capture toggles and prepare-login controls are under **Advanced settings** in the app. Outside advanced mode, Play turns capture off automatically before launching.
+Capture toggles and prepare-login controls are under **Settings > Advanced capture controls** in the app. Play turns capture off automatically before launching unless **Keep capture enabled when playing** is checked. Cancelling guided capture also turns capture off.
 
 Manual alternative: RuneLite (configure) → Client arguments → `--insecure-write-credentials` → Save.
 
@@ -61,7 +61,7 @@ Requirements:
 Sender:
 
 1. Select the saved profile.
-2. Open Pair Transfer -> **Send** and click **Create Pair**.
+2. Open **Transfer > Send** and click **Create secure pair**.
 3. The app starts a local one-use HTTP transfer server.
 4. The app downloads Cloudflare Tunnel if needed.
 5. The app starts Cloudflare Tunnel with:
@@ -75,12 +75,12 @@ cloudflared tunnel --url http://127.0.0.1:<random-port>
 
 Receiver:
 
-1. Open Pair Transfer -> **Receive**.
+1. Open **Transfer > Receive**.
 2. Paste the Pair URL and Pair code into the app.
 3. Optional: enter a profile name to rename it on this PC.
-4. Click **Receive Pair**.
+4. Click **Receive profile**.
 
-The transfer stops after one successful import, after **Stop Share**, or when the sender app closes. The random `trycloudflare.com` URL is not treated as secret by itself; the receiver must also send the 8-digit pairing code.
+The transfer stops after one successful import, after **Stop sharing**, or when the sender app closes. The random `trycloudflare.com` URL is not treated as secret by itself; the receiver must also send the 8-digit pairing code.
 The share also expires automatically after 15 minutes and after five wrong code attempts.
 
 ---

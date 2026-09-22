@@ -1,0 +1,161 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:JagexSwitcher.App" x:Class="JagexSwitcher.App.MainWindow"
+        Title="Jagex Switcher" Width="1160" Height="760" MinWidth="940" MinHeight="650"
+        WindowStartupLocation="CenterScreen" WindowDecorations="None">
+  <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
+    <Grid RowDefinitions="52,*,40">
+      <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource PanelBrush}" PointerPressed="DragWindow">
+        <StackPanel Orientation="Horizontal" Spacing="12" Margin="20,0" VerticalAlignment="Center">
+          <Border Background="{DynamicResource SelectionBrush}" CornerRadius="6" Width="28" Height="28">
+            <TextBlock Classes="mark" Text="J" FontSize="17" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="Jagex Switcher" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <TextBlock Text="/" Foreground="{DynamicResource LineBrush}" VerticalAlignment="Center" />
+          <TextBlock Text="OLD SCHOOL RUNESCAPE" Classes="eyebrow" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="0,0,8,0" VerticalAlignment="Center">
+          <Button Classes="subtle" Width="40" Padding="0" Click="Minimize" AutomationProperties.Name="Minimize"><TextBlock Classes="icon" Text="&#xE921;" FontSize="11" /></Button>
+          <Button Classes="subtle" Width="40" Padding="0" Click="Maximize" AutomationProperties.Name="Maximize or restore"><TextBlock Classes="icon" Text="&#xE922;" FontSize="11" /></Button>
+          <Button Classes="subtle" Width="40" Padding="0" Click="CloseWindow" AutomationProperties.Name="Close"><TextBlock Classes="icon" Text="&#xE8BB;" FontSize="11" /></Button>
+        </StackPanel>
+      </Grid>
+
+      <Grid Grid.Row="1">
+        <Grid Name="Workspace" ColumnDefinitions="84,300,*">
+          <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,1,0">
+            <DockPanel Margin="9,20,9,16">
+              <Button DockPanel.Dock="Bottom" Name="SettingsButton" Classes="rail subtle" Click="OpenSettings" AutomationProperties.Name="Settings">
+                <StackPanel Spacing="9"><TextBlock Classes="icon" Text="&#xE713;" FontSize="20" HorizontalAlignment="Center" /><TextBlock Text="Settings" FontSize="10" HorizontalAlignment="Center" /></StackPanel>
+              </Button>
+              <StackPanel Spacing="12">
+                <Button Name="ProfilesButton" Classes="rail subtle active" Click="FocusProfiles" AutomationProperties.Name="Profiles">
+                  <StackPanel Spacing="9"><TextBlock Classes="icon" Text="&#xE716;" FontSize="20" HorizontalAlignment="Center" /><TextBlock Text="Profiles" FontSize="10" HorizontalAlignment="Center" /></StackPanel>
+                </Button>
+                <Button Name="TransferButton" Classes="rail subtle" Click="OpenTransfer" AutomationProperties.Name="Transfer profiles">
+                  <StackPanel Spacing="9"><TextBlock Classes="icon" Text="&#xE8AB;" FontSize="20" HorizontalAlignment="Center" /><TextBlock Text="Transfer" FontSize="10" HorizontalAlignment="Center" /></StackPanel>
+                </Button>
+              </StackPanel>
+            </DockPanel>
+          </Border>
+
+          <Border Grid.Column="1" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,1,0" Background="{DynamicResource PanelBrush}">
+            <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="20,26,20,20">
+              <StackPanel Spacing="7" Margin="4,0,0,22">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Your profiles" FontSize="21" FontWeight="SemiBold" />
+                  <Border Grid.Column="1" Background="{DynamicResource RaisedBrush}" CornerRadius="6" Padding="9,4">
+                    <TextBlock Name="ProfileCount" Text="0" FontSize="12" Classes="quiet" />
+                  </Border>
+                </Grid>
+                <TextBlock Text="Choose your next adventure." FontSize="12" Classes="quiet" />
+              </StackPanel>
+              <TextBox Grid.Row="1" Name="SearchBox" PlaceholderText="Search profiles" TextChanged="SearchChanged" Margin="0,0,0,16" AutomationProperties.Name="Search profiles" />
+              <Grid Grid.Row="2">
+                <ListBox Name="ProfileList" Background="Transparent" Foreground="{DynamicResource InkBrush}" BorderThickness="0" Padding="0" SelectionChanged="SelectionChanged"
+                         DoubleTapped="PlayDoubleTapped" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Saved profiles">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:ProfileInfo">
+                      <Grid ColumnDefinitions="42,*" ColumnSpacing="12">
+                        <Border Classes="avatar" Width="42" Height="46" CornerRadius="8">
+                          <TextBlock Classes="initial" Text="{Binding Initial}" FontSize="21" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Spacing="5" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding DisplayName}" FontSize="11" Classes="quiet" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding CredentialStatus}" FontSize="10" Classes="quiet" Classes.ready="{Binding IsReady}" />
+                        </StackPanel>
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Name="ListEmpty" Text="No profiles yet.&#10;Add an account to get started." TextWrapping="Wrap" Classes="quiet" Margin="12,20" LineHeight="23" />
+              </Grid>
+              <StackPanel Grid.Row="3" Spacing="10" Margin="0,16,0,0">
+                <Button Name="AddButton" HorizontalAlignment="Stretch" Click="OpenAdd" AutomationProperties.Name="Add account">
+                  <StackPanel Orientation="Horizontal" Spacing="10"><TextBlock Classes="icon" Text="&#xE710;" VerticalAlignment="Center" /><TextBlock Text="Add account" /></StackPanel>
+                </Button>
+                <Button Name="RefreshButton" Classes="subtle" Click="RefreshClicked" HorizontalAlignment="Stretch" Content="Refresh profiles   ·   F5" FontSize="11" Foreground="{DynamicResource QuietBrush}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="30,28,30,24" Spacing="22">
+              <StackPanel Spacing="7">
+                <TextBlock Text="YOUR NEXT SESSION" Classes="eyebrow" />
+                <TextBlock Text="Back to Gielinor." FontSize="29" FontWeight="SemiBold" LetterSpacing="-0.6" />
+              </StackPanel>
+              <Border Name="HeroPanel" Height="264" Background="Black" CornerRadius="12" ClipToBounds="True">
+                <Grid>
+                  <Border Name="LandscapeImage">
+                    <Border.Background><ImageBrush Source="/Assets/landscape.png" Stretch="UniformToFill" AlignmentY="Top" /></Border.Background>
+                  </Border>
+                  <Border>
+                    <Border.Background>
+                      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                        <GradientStop Color="#00111417" Offset="0.2" /><GradientStop Color="#EE111417" Offset="1" />
+                      </LinearGradientBrush>
+                    </Border.Background>
+                  </Border>
+                  <StackPanel Margin="26" VerticalAlignment="Bottom" Spacing="8">
+                    <TextBlock Name="HeroEyebrow" Text="A NEW ADVENTURE AWAITS" FontSize="10" LetterSpacing="1.5" Foreground="#EAC17A" />
+                    <TextBlock Name="CharacterName" Text="Make yourself at home." FontSize="30" FontWeight="SemiBold" Foreground="#FFFFFF" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Name="HeroCaption" Text="Your characters. One place to launch." FontSize="12" Foreground="#CED3D4" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+
+              <StackPanel Name="SelectedDetails" Spacing="22" IsVisible="False">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                  <StackPanel Spacing="7">
+                    <TextBlock Name="SelectedName" FontSize="21" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Name="CredentialText" Classes="ready" FontSize="12" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Name="ManageButton" Content="Manage" Classes="subtle" Click="OpenManage" VerticalAlignment="Top" />
+                </Grid>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="20">
+                  <StackPanel Spacing="8"><TextBlock Text="LAST PLAYED" Classes="eyebrow" /><TextBlock Name="LastPlayedText" FontSize="13" /></StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="8"><TextBlock Text="PROFILE SAVED" Classes="eyebrow" /><TextBlock Name="ImportedText" FontSize="13" /></StackPanel>
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                  <Button Name="PlayButton" Classes="primary" Height="54" HorizontalAlignment="Stretch" Click="PlayClicked" AutomationProperties.Name="Play in RuneLite">
+                    <StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Classes="icon" Text="&#xE768;" FontSize="16" VerticalAlignment="Center" /><TextBlock Text="Play in RuneLite" FontSize="15" /></StackPanel>
+                  </Button>
+                  <TextBlock Grid.Column="1" Text="Enter ↵" FontSize="11" Classes="quiet" VerticalAlignment="Center" />
+                </Grid>
+              </StackPanel>
+
+              <StackPanel Name="WelcomePanel" Spacing="13">
+                <TextBlock Text="A quicker way back in." FontSize="22" FontWeight="SemiBold" />
+                <TextBlock Text="Add an account, start your character through Jagex Launcher, and save the session. Next time, just pick a profile and play."
+                           TextWrapping="Wrap" Classes="quiet" FontSize="13" LineHeight="21" />
+                <TextBlock Text="Already set up elsewhere? Use Transfer to bring a profile over." TextWrapping="Wrap" Classes="quiet" FontSize="12" />
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </Grid>
+
+        <Border Name="DialogOverlay" Background="#BB080A0D" IsVisible="False" Padding="28" KeyboardNavigation.TabNavigation="Cycle">
+          <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="16"
+                  Width="480" MaxHeight="570" HorizontalAlignment="Center" VerticalAlignment="Center" BoxShadow="0 24 80 0 #80000000">
+            <Grid RowDefinitions="Auto,*" Margin="28">
+              <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,22">
+                <StackPanel Spacing="8"><TextBlock Name="DialogTitle" FontSize="25" FontWeight="SemiBold" /><TextBlock Name="DialogSubtitle" Classes="quiet" TextWrapping="Wrap" FontSize="12" LineHeight="19" /></StackPanel>
+                <Button Grid.Column="1" Name="DialogClose" Classes="subtle" Content="✕" Width="34" MinHeight="34" Padding="0" VerticalAlignment="Top" Click="CloseDialogClicked" AutomationProperties.Name="Close dialog" />
+              </Grid>
+              <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"><ContentControl Name="DialogContent" /></ScrollViewer>
+            </Grid>
+          </Border>
+        </Border>
+      </Grid>
+
+      <Border Grid.Row="2" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource PanelBrush}">
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="18,0" ColumnSpacing="12">
+          <ProgressBar Name="BusyIndicator" IsVisible="False" IsIndeterminate="True" Width="36" Height="3" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1" Name="StatusText" Text="Ready when you are." Classes="quiet" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <TextBlock Grid.Column="2" Name="CaptureBadge" Text="CAPTURE ON" IsVisible="False" FontSize="10" Foreground="{DynamicResource GoldBrush}" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+    </Grid>
+  </Border>
+</Window>
