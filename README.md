@@ -87,6 +87,12 @@ Pushes to `main` run the [release workflow](.github/workflows/release.yml), chec
 
 - [Account setup and implementation details](docs/ACCOUNT_SWITCHER.md)
 
+## License and contributions
+
+Jagex Switcher uses a custom source-available license. Personal, non-commercial use of an unmodified copy is permitted. Publishing modified versions and commercial use are not permitted. Contributions are welcome through pull requests under the [contribution agreement](CONTRIBUTING.md).
+
+GitHub allows public repositories to be forked. The license sets the permitted use of the code, but cannot disable GitHub's fork feature.
+
 ---
 
 An independent project, not affiliated with or endorsed by Jagex or RuneLite. RuneScape and Old School RuneScape belong to Jagex. The landscape is original decorative artwork, not an official game screenshot.

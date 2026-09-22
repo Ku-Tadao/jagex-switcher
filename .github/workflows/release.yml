@@ -55,4 +55,4 @@ jobs:
           gh release create $tag publish/JagexSwitcher.exe `
             --target $env:GITHUB_SHA `
             --title "Jagex Switcher $tag" `
-            --notes "Self-contained Windows x64 build with the new Avalonia character launcher, searchable profiles, guided account capture, optional PC-to-PC pairing, and light, dark, and high-contrast themes. UI and service checks run before release. Commit: $env:GITHUB_SHA"
+            --notes "Self-contained Windows x64 build with the new Avalonia character launcher, searchable profiles, guided account capture, optional PC-to-PC pairing, and light, dark, and high-contrast themes. This release is unsigned. Windows SmartScreen may show an unrecognized app warning when you run it. UI and service checks run before release. Commit: $env:GITHUB_SHA"

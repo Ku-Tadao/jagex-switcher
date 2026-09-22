@@ -1,0 +1,32 @@
+Jagex Switcher Source-Available License 1.0
+Copyright (c) 2026 Ku-Tadao
+
+This license applies only to original code and other material in this repository that is owned by the copyright holder identified above. Third-party software and other third-party material remain subject to their own licenses and terms.
+
+1. Permission to view and run
+
+The copyright holder grants you a worldwide, non-exclusive, non-transferable permission to view this source code and to download, install, and run an unmodified copy of Jagex Switcher for your own personal, non-commercial use. You may make copies reasonably necessary to install, run, and back up that unmodified copy.
+
+2. Restrictions
+
+Except for the limited contribution permission in section 3, you may not modify, adapt, translate, or create derivative works from the software, or distribute, publish, sublicense, sell, rent, lease, host, or otherwise make the software or a modified version available to others.
+
+You may not use the software or any part of it for commercial purposes. Commercial purposes include using it to obtain payment or another commercial advantage, offering it as part of a paid product or service, or using it to provide paid support or hosting.
+
+3. Contributions
+
+You may make temporary changes as reasonably necessary to prepare or test a proposed contribution, and you may submit that proposal through the project's contribution process. This permission does not allow you to publish or distribute a modified version.
+
+Submitting a contribution is subject to the Jagex Switcher Contribution Agreement in CONTRIBUTING.md. If the copyright holder accepts your contribution, that agreement grants the copyright holder permission to incorporate and distribute it as part of Jagex Switcher under this license. It does not grant commercial-use rights.
+
+4. No other rights
+
+All rights not expressly granted here are reserved by the copyright holder. This license does not grant trademark rights. It does not replace or change the terms that apply to third-party components.
+
+5. Termination
+
+The permissions in this license end automatically if you violate its terms. They may be reinstated only through written permission from the copyright holder.
+
+6. Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE COPYRIGHT HOLDER IS NOT LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
