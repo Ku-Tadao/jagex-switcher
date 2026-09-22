@@ -6,34 +6,37 @@ internal sealed class MainForm : Form
     // Ceiling: reads Windows theme at startup only. Upgrade path: listen for WM_SETTINGCHANGE.
     private static readonly bool HighContrast = SystemInformation.HighContrast;
     private static readonly bool LightTheme = !HighContrast && IsWindowsLightTheme();
-    private static readonly Color Bg = HighContrast ? SystemColors.Window : LightTheme ? Color.FromArgb(248, 247, 244) : Color.FromArgb(27, 27, 41);
-    private static readonly Color Surface = HighContrast ? SystemColors.Control : LightTheme ? Color.FromArgb(238, 236, 230) : Color.FromArgb(38, 38, 56);
-    private static readonly Color SurfaceAlt = HighContrast ? SystemColors.ControlLight : LightTheme ? Color.FromArgb(244, 242, 237) : Color.FromArgb(34, 34, 52);
-    private static readonly Color Border = HighContrast ? SystemColors.WindowText : LightTheme ? Color.FromArgb(190, 185, 176) : Color.FromArgb(51, 51, 74);
-    private static readonly Color TextColor = HighContrast ? SystemColors.WindowText : LightTheme ? Color.FromArgb(31, 31, 38) : Color.FromArgb(232, 232, 240);
-    private static readonly Color Muted = HighContrast ? SystemColors.GrayText : LightTheme ? Color.FromArgb(86, 84, 96) : Color.FromArgb(158, 158, 184);
-    private static readonly Color Accent = HighContrast ? SystemColors.Highlight : LightTheme ? Color.FromArgb(174, 113, 31) : Color.FromArgb(232, 177, 75);
-    private static readonly Color AccentText = HighContrast ? SystemColors.HighlightText : LightTheme ? Color.FromArgb(255, 252, 244) : Color.FromArgb(27, 27, 41);
-    private static readonly Color Danger = HighContrast ? SystemColors.HotTrack : Color.FromArgb(224, 85, 107);
-    private static readonly Color RowBg = HighContrast ? SystemColors.Window : LightTheme ? Color.FromArgb(253, 252, 248) : Color.FromArgb(34, 34, 52);
-    private static readonly Color RowBgAlt = HighContrast ? SystemColors.Window : LightTheme ? Color.FromArgb(246, 244, 239) : Color.FromArgb(30, 30, 46);
-    private static readonly Color RowSelected = HighContrast ? SystemColors.Highlight : LightTheme ? Color.FromArgb(247, 221, 173) : Color.FromArgb(58, 51, 32);
+    private static readonly Color Bg = HighContrast ? SystemColors.Window : LightTheme ? Color.FromArgb(240, 242, 240) : Color.FromArgb(18, 23, 23);
+    private static readonly Color Surface = HighContrast ? SystemColors.Control : LightTheme ? Color.White : Color.FromArgb(27, 34, 33);
+    private static readonly Color SurfaceAlt = HighContrast ? SystemColors.ControlLight : LightTheme ? Color.FromArgb(230, 234, 230) : Color.FromArgb(35, 44, 41);
+    private static readonly Color Border = HighContrast ? SystemColors.WindowText : LightTheme ? Color.FromArgb(182, 193, 184) : Color.FromArgb(60, 73, 66);
+    private static readonly Color TextColor = HighContrast ? SystemColors.WindowText : LightTheme ? Color.FromArgb(27, 38, 32) : Color.FromArgb(237, 239, 230);
+    private static readonly Color Muted = HighContrast ? SystemColors.GrayText : LightTheme ? Color.FromArgb(83, 100, 89) : Color.FromArgb(161, 177, 164);
+    private static readonly Color Accent = HighContrast ? SystemColors.Highlight : LightTheme ? Color.FromArgb(129, 89, 24) : Color.FromArgb(218, 184, 113);
+    private static readonly Color AccentText = HighContrast ? SystemColors.HighlightText : LightTheme ? Color.FromArgb(255, 252, 244) : Color.FromArgb(18, 23, 23);
+    private static readonly Color Danger = HighContrast ? SystemColors.HotTrack : LightTheme ? Color.FromArgb(166, 49, 52) : Color.FromArgb(241, 151, 139);
+    private static readonly Color RowBg = Surface;
+    private static readonly Color RowSelected = HighContrast ? SystemColors.Highlight : LightTheme ? Color.FromArgb(229, 233, 215) : Color.FromArgb(48, 58, 45);
     private static readonly Color WarningBg = HighContrast ? SystemColors.Control : LightTheme ? Color.FromArgb(255, 238, 197) : Color.FromArgb(61, 48, 30);
 
-    private static readonly Font BodyFont = new("Segoe UI", 9F);
-    private static readonly Font BodyStrongFont = new("Segoe UI Semibold", 9F);
-    private static readonly Font TitleFont = new("Segoe UI Semibold", 15F);
+    private static readonly Font BodyFont = new("Segoe UI", 10F);
+    private static readonly Font BodyStrongFont = new("Segoe UI Semibold", 10F);
+    private static readonly Font TitleFont = new("Segoe UI Semibold", 23F);
+    private static readonly Font ProfileTitleFont = new("Segoe UI Semibold", 17F);
     private static readonly Font SectionFont = new("Segoe UI", 8F, FontStyle.Bold);
     private static readonly Font HeaderFont = new("Segoe UI", 8.25F, FontStyle.Bold);
 
     private const int RightColumnWidth = 360;
     private const int RightContentWidth = 296;
-    private const int StatusColumnIndex = 4;
+    private const int StatusColumnIndex = 2;
 
     private readonly SwitcherService switcher;
     private readonly ListView profileList = new();
     private readonly Panel profileHost = new();
     private readonly Panel emptyPanel = new();
+    private readonly Label libraryCount = new();
+    private readonly FlowLayoutPanel navigation = new();
+    private readonly ImageList rowHeight = new() { ImageSize = new Size(1, 72) };
     private readonly FlowLayoutPanel actions = new();
     private readonly Label captureLabel = new();
     private readonly Label statusLabel = new();
@@ -48,6 +51,7 @@ internal sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer addAccountTimer = new();
     private readonly HashSet<Control> persistentControls;
     private PairMode pairMode = PairMode.Send;
+    private ActionPage actionPage = ActionPage.Profile;
     private bool addAccountActive;
     private bool busy;
     private int captureStableTicks;
@@ -57,6 +61,7 @@ internal sealed class MainForm : Form
 
     private enum BtnStyle { Default, Primary, Danger }
     private enum PairMode { Send, Receive }
+    private enum ActionPage { Profile, Add, Transfer }
 
     public MainForm(SwitcherService switcher)
     {
@@ -67,8 +72,10 @@ internal sealed class MainForm : Form
             ? "Jagex Switcher"
             : $"Jagex Switcher v{version.ToString(3)}";
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(860, 560);
-        Size = new Size(1040, 720);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96, 96);
+        MinimumSize = new Size(960, 640);
+        Size = new Size(1120, 780);
         BackColor = Bg;
         Font = BodyFont;
         ForeColor = TextColor;
@@ -93,6 +100,7 @@ internal sealed class MainForm : Form
         FormClosed += (_, _) =>
         {
             addAccountTimer.Dispose();
+            rowHeight.Dispose();
             activePairTransfer?.Dispose();
         };
         RefreshProfiles();
@@ -109,12 +117,39 @@ internal sealed class MainForm : Form
         profileHost.Controls.Add(profileList);
         profileHost.Controls.Add(emptyPanel);
 
+        var library = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Margin = new Padding(0, 0, 24, 0) };
+        library.Controls.Add(profileHost);
+        var libraryHeader = new Panel { Dock = DockStyle.Top, Height = 68, BackColor = Surface };
+        libraryCount.Text = "YOUR PROFILES";
+        libraryCount.Font = BodyStrongFont;
+        libraryCount.ForeColor = TextColor;
+        libraryCount.Dock = DockStyle.Fill;
+        libraryCount.Padding = new Padding(20, 24, 0, 0);
+        var refresh = NewButton("Refresh  F5", (_, _) => RefreshProfiles());
+        refresh.Dock = DockStyle.Right;
+        refresh.Width = 112;
+        refresh.FlatAppearance.BorderSize = 0;
+        libraryHeader.Controls.Add(libraryCount);
+        libraryHeader.Controls.Add(refresh);
+        library.Controls.Add(libraryHeader);
+        var hint = new Label { Text = "Enter to play   /   F2 to rename   /   Right-click for more", Dock = DockStyle.Bottom,
+            Height = 40, Padding = new Padding(20, 10, 0, 0), ForeColor = Muted, Font = HeaderFont };
+        library.Controls.Add(hint);
+
         actions.Dock = DockStyle.Fill;
         actions.FlowDirection = FlowDirection.TopDown;
         actions.WrapContents = false;
         actions.AutoScroll = true;
         actions.BackColor = Bg;
-        actions.Padding = new Padding(18, 8, 0, 8);
+        actions.Padding = new Padding(12, 8, 0, 16);
+
+        var sidebar = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        navigation.Dock = DockStyle.Top;
+        navigation.Height = 48;
+        navigation.WrapContents = false;
+        navigation.Padding = new Padding(12, 0, 0, 0);
+        sidebar.Controls.Add(actions);
+        sidebar.Controls.Add(navigation);
 
         var body = new TableLayoutPanel
         {
@@ -122,13 +157,13 @@ internal sealed class MainForm : Form
             ColumnCount = 2,
             RowCount = 1,
             BackColor = Bg,
-            Padding = new Padding(16)
+            Padding = new Padding(24, 20, 12, 20)
         };
         body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, RightColumnWidth));
         body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        body.Controls.Add(profileHost, 0, 0);
-        body.Controls.Add(actions, 1, 0);
+        body.Controls.Add(library, 0, 0);
+        body.Controls.Add(sidebar, 1, 0);
 
         Controls.Add(body);
         Controls.Add(BuildStatusBar());
@@ -146,10 +181,20 @@ internal sealed class MainForm : Form
         profileList.ForeColor = TextColor;
         profileList.Font = BodyFont;
         profileList.OwnerDraw = true;
+        profileList.BorderStyle = BorderStyle.None;
+        profileList.SmallImageList = rowHeight;
+        profileList.HandleCreated += (_, _) => rowHeight.ImageSize = new Size(1, (int)(72 * profileList.DeviceDpi / 96f));
+        profileList.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+        profileList.AccessibleName = "Saved profiles";
         profileList.DrawColumnHeader += OnDrawColumnHeader;
         profileList.DrawSubItem += OnDrawSubItem;
         profileList.SelectedIndexChanged += (_, _) => RenderActions();
-        profileList.ClientSizeChanged += (_, _) => FillListColumns();
+        profileList.ClientSizeChanged += (_, _) =>
+        {
+            // Size columns after Win32 finishes resizing its scrollable client area.
+            if (profileList.IsHandleCreated)
+                profileList.BeginInvoke((Action)FillListColumns);
+        };
         // ponytail: MS OwnerDraw workaround — Win32 can fire DrawItem without DrawSubItem on hover.
         profileList.MouseMove += OnProfileListMouseMove;
         profileList.Invalidated += OnProfileListInvalidated;
@@ -160,9 +205,7 @@ internal sealed class MainForm : Form
             .GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
             ?.SetValue(profileList, true);
 
-        profileList.Columns.Add("Profile", 140);
-        profileList.Columns.Add("Character", 150);
-        profileList.Columns.Add("Imported", 120);
+        profileList.Columns.Add("Profile / character", 200);
         profileList.Columns.Add("Last played", 120);
         profileList.Columns.Add("Status", 100);
     }
@@ -238,6 +281,8 @@ internal sealed class MainForm : Form
 
     private void FocusRenameBox()
     {
+        actionPage = ActionPage.Profile;
+        RenderActions();
         if (renameProfileBox.Parent is null)
         {
             return;
@@ -250,80 +295,40 @@ internal sealed class MainForm : Form
     private void BuildEmptyPanel()
     {
         emptyPanel.Dock = DockStyle.Fill;
-        emptyPanel.BackColor = RowBg;
-        emptyPanel.Padding = new Padding(28);
-
-        var title = new Label
-        {
-            Text = "No saved profiles yet",
-            Dock = DockStyle.Top,
-            Height = 32,
-            Font = new Font("Segoe UI Semibold", 13F),
-            ForeColor = TextColor,
-            BackColor = RowBg
-        };
-        var copy = new Label
-        {
-            Text = "Name the profile on the right, then use Add Account for the guided Jagex Launcher capture. Use Add Current only when RuneLite already wrote credentials.",
-            Dock = DockStyle.Top,
-            Height = 60,
-            Font = BodyFont,
-            ForeColor = Muted,
-            BackColor = RowBg
-        };
-
-        emptyPanel.Controls.Add(copy);
-        emptyPanel.Controls.Add(title);
+        emptyPanel.BackColor = Surface;
+        emptyPanel.Padding = new Padding(28, 38, 28, 20);
+        var content = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown,
+            WrapContents = false, AutoScroll = true };
+        var title = new Label { Text = "Your next adventure\nstarts here.", Font = TitleFont,
+            ForeColor = TextColor, AutoSize = true, Margin = new Padding(0, 0, 0, 20) };
+        var copy = new Label { Text = "Save your characters once. Choose a profile and get straight back to Gielinor.",
+            Font = BodyFont, ForeColor = Muted, AutoSize = true, MaximumSize = new Size(350, 0),
+            Margin = new Padding(0, 0, 0, 28) };
+        var steps = new Label { Text = "01   Open Jagex Launcher\n\n02   Start your character in RuneLite\n\n03   Save the captured profile", Font = BodyFont,
+            ForeColor = TextColor, AutoSize = true, Margin = new Padding(0, 0, 0, 28) };
+        var add = NewButton("Add your first account", (_, _) => ShowPage(ActionPage.Add), BtnStyle.Primary);
+        content.Controls.AddRange(new Control[] { title, copy, steps, add });
+        emptyPanel.Controls.Add(content);
     }
 
     private Control BuildHeader()
     {
-        var header = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 72,
-            BackColor = Surface
-        };
-
+        var header = new Panel { Dock = DockStyle.Top, Height = 96, BackColor = Bg,
+            Padding = new Padding(24, 12, 24, 0) };
         captureLabel.Dock = DockStyle.Bottom;
-        captureLabel.Height = 18;
+        captureLabel.Height = 26;
         captureLabel.Font = BodyFont;
         captureLabel.ForeColor = Accent;
         captureLabel.BackColor = WarningBg;
-        captureLabel.Padding = new Padding(16, 1, 0, 0);
+        captureLabel.Padding = new Padding(8, 3, 0, 0);
         captureLabel.Visible = false;
-
-        var subtitle = new Label
-        {
-            Text = "OSRS / RuneLite profile manager",
-            Font = new Font("Segoe UI", 8.25F),
-            ForeColor = Muted,
-            Dock = DockStyle.Top,
-            Height = 18,
-            Padding = new Padding(16, 0, 0, 4),
-            BackColor = Surface
-        };
-        var title = new Label
-        {
-            Text = "Jagex Switcher",
-            Font = TitleFont,
-            ForeColor = TextColor,
-            Dock = DockStyle.Top,
-            Height = 34,
-            Padding = new Padding(16, 8, 0, 0),
-            BackColor = Surface
-        };
-        var accentStripe = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 3,
-            BackColor = Accent
-        };
-
+        var subtitle = new Label { Text = "OLD SCHOOL RUNESCAPE  /  RUNELITE", Font = HeaderFont,
+            ForeColor = Muted, Dock = DockStyle.Top, Height = 24, Padding = new Padding(2, 6, 0, 0) };
+        var title = new Label { Text = "Jagex Switcher", Font = TitleFont, ForeColor = TextColor,
+            Dock = DockStyle.Top, Height = 46 };
         header.Controls.Add(captureLabel);
         header.Controls.Add(subtitle);
         header.Controls.Add(title);
-        header.Controls.Add(accentStripe);
         return header;
     }
 
@@ -332,14 +337,14 @@ internal sealed class MainForm : Form
         var statusBar = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 32,
+            Height = 40,
             BackColor = Surface
         };
 
         statusLabel.Dock = DockStyle.Fill;
         statusLabel.Font = BodyFont;
         statusLabel.ForeColor = TextColor;
-        statusLabel.Padding = new Padding(16, 7, 16, 0);
+        statusLabel.Padding = new Padding(24, 10, 24, 0);
         statusLabel.BackColor = Surface;
         statusBar.Controls.Add(statusLabel);
         return statusBar;
@@ -384,13 +389,62 @@ internal sealed class MainForm : Form
         }
         else
         {
-            RenderProfileActions();
-            RenderPairTransfer();
-            RenderAdvanced();
+            if (actionPage == ActionPage.Transfer)
+                RenderPairTransfer();
+            else if (actionPage == ActionPage.Add)
+                RenderAddActions();
+            else
+            {
+                RenderProfileActions();
+                RenderAdvanced();
+            }
         }
 
         actions.ResumeLayout();
+        RenderNavigation();
         UpdateCaptureStatus();
+    }
+
+    private void ShowPage(ActionPage page)
+    {
+        actionPage = page;
+        actions.AutoScrollPosition = Point.Empty;
+        RenderActions();
+    }
+
+    private void RenderNavigation()
+    {
+        if (navigation.Controls.Count == 0)
+        {
+            foreach (var (page, title) in new[] { (ActionPage.Profile, "Profile"), (ActionPage.Add, "Add account"), (ActionPage.Transfer, "Transfer") })
+            {
+                var button = NewButton(title, (_, _) => ShowPage(page));
+                button.Width = (RightContentWidth - 8) / 3;
+                button.Margin = new Padding(0, 0, 4, 0);
+                button.Tag = page;
+                navigation.Controls.Add(button);
+            }
+        }
+        foreach (Button button in navigation.Controls)
+        {
+            var selected = actionPage == (ActionPage)button.Tag!;
+            button.Enabled = !addAccountActive;
+            button.BackColor = selected ? RowSelected : Bg;
+            button.ForeColor = selected ? (HighContrast ? SystemColors.HighlightText : Accent) : Muted;
+            button.FlatAppearance.BorderColor = selected ? Accent : Border;
+            button.AccessibleDescription = selected ? "Current view" : "Open view";
+        }
+    }
+
+    private void RenderAddActions()
+    {
+        actions.Controls.Add(SectionHeader("Add account"));
+        actions.Controls.Add(InfoLabel("Open Jagex Launcher and start a character in RuneLite. We'll save the captured session here."));
+        AddProfileNameField("Profile name (optional)");
+        actions.Controls.Add(NewButton("Add Account", (_, _) => StartAddAccount(), BtnStyle.Primary));
+        actions.Controls.Add(SectionHeader("Already signed in?"));
+        actions.Controls.Add(InfoLabel("Use Add Current if RuneLite has already written valid credentials for this character."));
+        actions.Controls.Add(NewButton("Add Current", (_, _) => ImportCurrent()));
     }
 
     private void ClearActions()
@@ -427,11 +481,9 @@ internal sealed class MainForm : Form
 
         if (selected is null)
         {
-            actions.Controls.Add(InfoLabel("Create the first saved profile from a Jagex-launched RuneLite session. Name is optional; blank uses the captured character name."));
-            AddProfileNameField("Profile name (optional)");
-            actions.Controls.Add(NewButton("Add Account", (_, _) => StartAddAccount(), BtnStyle.Primary));
-            actions.Controls.Add(NewButton("Add Current", (_, _) => ImportCurrent()));
-            actions.Controls.Add(NewButton("Refresh", (_, _) => RefreshProfiles()));
+            actions.Controls.Add(InfoLabel("Select a saved profile to play, or add an account to begin."));
+            actions.Controls.Add(SectionHeader("On another PC?"));
+            actions.Controls.Add(InfoLabel("Use Transfer to receive a saved profile from another PC you control."));
             return;
         }
 
@@ -441,7 +493,7 @@ internal sealed class MainForm : Form
             FormatTimestamp(selected.ImportedAt),
             FormatTimestamp(selected.LastPlayedAt),
             selected.CredentialStatus));
-        actions.Controls.Add(NewButton("Play", (_, _) => PlaySelected(), BtnStyle.Primary));
+        actions.Controls.Add(NewButton("Play in RuneLite", (_, _) => PlaySelected(), BtnStyle.Primary));
         actions.Controls.Add(ButtonRow(
             NewButton("Re-import", (_, _) => ImportCurrent(selected.Name)),
             NewButton("Remove", (_, _) => RemoveSelected(), BtnStyle.Danger)));
@@ -450,12 +502,6 @@ internal sealed class MainForm : Form
         actions.Controls.Add(ButtonRow(
             NewButton("Rename", (_, _) => RenameSelected()),
             NewButton("Open Vault", (_, _) => OpenVaultFolder())));
-        actions.Controls.Add(NewButton("Refresh", (_, _) => RefreshProfiles()));
-        actions.Controls.Add(SectionHeader("Add another"));
-        AddProfileNameField("Profile name (optional)");
-        actions.Controls.Add(ButtonRow(
-            NewButton("Add Account", (_, _) => StartAddAccount()),
-            NewButton("Add Current", (_, _) => ImportCurrent())));
     }
 
     private void RenderPairTransfer()
@@ -564,7 +610,7 @@ internal sealed class MainForm : Form
         {
             Text = text,
             Width = RightContentWidth,
-            Height = 32,
+            Height = 40,
             FlatStyle = FlatStyle.Flat,
             Font = style == BtnStyle.Primary ? BodyStrongFont : BodyFont,
             TextAlign = ContentAlignment.MiddleCenter,
@@ -584,15 +630,16 @@ internal sealed class MainForm : Form
             button.BackColor = Accent;
             button.ForeColor = AccentText;
             button.FlatAppearance.BorderColor = Accent;
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(245, 200, 110);
-            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(212, 165, 80);
+            button.Height = 48;
+            button.FlatAppearance.MouseOverBackColor = HighContrast ? SystemColors.Highlight : ControlPaint.Light(Accent, .12f);
+            button.FlatAppearance.MouseDownBackColor = HighContrast ? SystemColors.Highlight : ControlPaint.Dark(Accent, .12f);
         }
         else if (style == BtnStyle.Danger)
         {
             button.ForeColor = Danger;
-            button.FlatAppearance.BorderColor = Danger;
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(60, 32, 40);
-            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(80, 40, 50);
+            button.FlatAppearance.BorderColor = Border;
+            button.FlatAppearance.MouseOverBackColor = SurfaceAlt;
+            button.FlatAppearance.MouseDownBackColor = Border;
         }
 
         button.Click += click;
@@ -604,6 +651,7 @@ internal sealed class MainForm : Form
         var each = (RightContentWidth - 6) / 2;
         left.Width = each;
         right.Width = each;
+        left.Height = right.Height = 40;
         left.Margin = new Padding(0, 0, 6, 0);
         right.Margin = new Padding(0, 0, 0, 0);
         var row = new FlowLayoutPanel
@@ -611,7 +659,7 @@ internal sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             Width = RightContentWidth,
-            Height = 32,
+            Height = 40,
             Margin = new Padding(0, 0, 0, 6),
             BackColor = Bg
         };
@@ -628,8 +676,8 @@ internal sealed class MainForm : Form
             Font = SectionFont,
             ForeColor = Muted,
             Width = RightContentWidth,
-            Height = 16,
-            Margin = new Padding(0, 14, 0, 6),
+            Height = 24,
+            Margin = new Padding(0, 16, 0, 8),
             BackColor = Bg
         };
     }
@@ -642,7 +690,7 @@ internal sealed class MainForm : Form
             Font = BodyFont,
             ForeColor = Muted,
             Width = RightContentWidth,
-            Height = 18,
+            Height = 22,
             Margin = new Padding(0, 2, 0, 2),
             BackColor = Bg
         };
@@ -656,24 +704,28 @@ internal sealed class MainForm : Form
             Font = BodyFont,
             ForeColor = Muted,
             Width = RightContentWidth,
-            Height = 50,
-            Margin = new Padding(0, 0, 0, 8),
+            AutoSize = true,
+            MaximumSize = new Size(RightContentWidth, 0),
+            MinimumSize = new Size(RightContentWidth, 0),
+            Margin = new Padding(0, 0, 0, 16),
             BackColor = Bg
         };
     }
 
-    private static Label ValueLabel(string profileName, string character, string imported, string lastPlayed, string credentialStatus)
+    private static Control ValueLabel(string profileName, string character, string imported, string lastPlayed, string credentialStatus)
     {
-        return new Label
-        {
-            Text = $"{profileName}{Environment.NewLine}{character}{Environment.NewLine}Imported {imported}{Environment.NewLine}Last played {lastPlayed}{Environment.NewLine}Status {credentialStatus}",
-            Font = BodyFont,
-            ForeColor = TextColor,
-            Width = RightContentWidth,
-            Height = 96,
-            Margin = new Padding(0, 0, 0, 8),
-            BackColor = Bg
-        };
+        var card = new Panel { Width = RightContentWidth, Height = 164, BackColor = Surface,
+            Padding = new Padding(16), Margin = new Padding(0, 0, 0, 16) };
+        var details = new Label { Text = $"{character}\nImported   {imported}\nLast played   {lastPlayed}",
+            Font = BodyFont, ForeColor = Muted, Dock = DockStyle.Fill };
+        var title = new Label { Text = profileName, Font = ProfileTitleFont,
+            ForeColor = TextColor, Dock = DockStyle.Top, Height = 38, AutoEllipsis = true };
+        var status = new Label { Text = credentialStatus, Font = BodyStrongFont,
+            ForeColor = credentialStatus == "Ready" ? Accent : Danger, Dock = DockStyle.Bottom, Height = 26 };
+        card.Controls.Add(details);
+        card.Controls.Add(title);
+        card.Controls.Add(status);
+        return card;
     }
 
     private void FillListColumns()
@@ -683,14 +735,12 @@ internal sealed class MainForm : Form
             return;
         }
 
-        var used = 0;
-        for (var i = 0; i < profileList.Columns.Count - 1; i++)
-        {
-            used += profileList.Columns[i].Width;
-        }
-
-        var remaining = profileList.ClientSize.Width - used;
-        profileList.Columns[^1].Width = remaining > 0 ? remaining : 0;
+        var scale = profileList.DeviceDpi / 96f;
+        profileList.Columns[1].Width = (int)(132 * scale);
+        profileList.Columns[2].Width = (int)(112 * scale);
+        profileList.Columns[0].Width = Math.Max(80, profileList.ClientSize.Width
+            - profileList.Columns[1].Width - profileList.Columns[2].Width - SystemInformation.VerticalScrollBarWidth - 4);
+        profileList.Columns[^1].Width = -2;
         profileList.Invalidate();
     }
 
@@ -712,27 +762,8 @@ internal sealed class MainForm : Form
         hoverRepaintedRows.Clear();
     }
 
-    private Rectangle FullListClientRowBounds(Rectangle rowSlice)
-    {
-        var width = profileList.ClientSize.Width - rowSlice.Left;
-        if (HasVerticalScrollBar())
-        {
-            width -= SystemInformation.VerticalScrollBarWidth;
-        }
-
-        return new Rectangle(rowSlice.Left, rowSlice.Top, Math.Max(rowSlice.Width, width), rowSlice.Height);
-    }
-
-    private bool HasVerticalScrollBar()
-    {
-        if (profileList.Items.Count == 0)
-        {
-            return false;
-        }
-
-        var itemHeight = profileList.GetItemRect(0, ItemBoundsPortion.Entire).Height;
-        return itemHeight > 0 && profileList.Items.Count * itemHeight > profileList.ClientSize.Height;
-    }
+    private Rectangle FullListClientRowBounds(Rectangle rowSlice) =>
+        new(0, rowSlice.Top, profileList.ClientSize.Width, rowSlice.Height);
 
     private void OnDrawColumnHeader(object? sender, DrawListViewColumnHeaderEventArgs e)
     {
@@ -751,25 +782,31 @@ internal sealed class MainForm : Form
             e.Graphics,
             e.Header.Text,
             HeaderFont,
-            e.Bounds,
+            Rectangle.Inflate(e.Bounds, -(int)(12 * profileList.DeviceDpi / 96f), 0),
             Muted,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.LeftAndRightPadding);
     }
 
     private void OnDrawSubItem(object? sender, DrawListViewSubItemEventArgs e)
     {
-        if (e.Item is null)
+        if (e.Item is null || e.Bounds.Width == 0)
         {
             return;
         }
 
+        var scale = profileList.DeviceDpi / 96f;
         if (e.ColumnIndex == 0)
         {
             var bg = e.Item.Selected
                 ? RowSelected
-                : ((e.ItemIndex & 1) == 0 ? RowBg : RowBgAlt);
+                : RowBg;
             using var brush = new SolidBrush(bg);
             e.Graphics.FillRectangle(brush, FullListClientRowBounds(e.Bounds));
+            if (e.Item.Selected)
+            {
+                using var marker = new SolidBrush(Accent);
+                e.Graphics.FillRectangle(marker, e.Bounds.Left, e.Bounds.Top + 10 * scale, 3 * scale, e.Bounds.Height - 20 * scale);
+            }
         }
 
         if (e.SubItem is null || e.Item.SubItems.Count <= e.ColumnIndex)
@@ -778,20 +815,28 @@ internal sealed class MainForm : Form
         }
 
         var textColor = e.Item.Selected && HighContrast ? SystemColors.HighlightText : TextColor;
-        if (e.ColumnIndex == StatusColumnIndex &&
+        if (!(e.Item.Selected && HighContrast) && e.ColumnIndex == StatusColumnIndex &&
             !string.Equals(e.SubItem.Text, "Ready", StringComparison.Ordinal) &&
             !string.IsNullOrEmpty(e.SubItem.Text))
         {
             textColor = Danger;
         }
 
-        TextRenderer.DrawText(
-            e.Graphics,
-            e.SubItem.Text,
-            BodyFont,
-            e.Bounds,
-            textColor,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.LeftAndRightPadding);
+        var bounds = Rectangle.Inflate(e.Bounds, -(int)(12 * scale), 0);
+        var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+        if (e.ColumnIndex == 0)
+        {
+            var top = new Rectangle(bounds.X, bounds.Y + (int)(12 * scale), bounds.Width, (int)(25 * scale));
+            TextRenderer.DrawText(e.Graphics, e.SubItem.Text, BodyStrongFont, top, textColor, flags);
+            var bottom = new Rectangle(bounds.X, bounds.Y + (int)(37 * scale), bounds.Width, (int)(23 * scale));
+            TextRenderer.DrawText(e.Graphics, (e.Item.Tag as ProfileInfo)?.DisplayName ?? "", BodyFont, bottom,
+                e.Item.Selected && HighContrast ? SystemColors.HighlightText : Muted, flags);
+            if (e.Item.Focused && profileList.Focused)
+                ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(e.Bounds, -4, -4), textColor, RowSelected);
+        }
+        else
+            TextRenderer.DrawText(e.Graphics, e.SubItem.Text, BodyFont, bounds, textColor, flags);
+
     }
 
     private void RefreshProfiles()
@@ -810,8 +855,6 @@ internal sealed class MainForm : Form
             foreach (var profile in profiles)
             {
                 var item = new ListViewItem(profile.Name);
-                item.SubItems.Add(string.IsNullOrWhiteSpace(profile.DisplayName) ? "-" : profile.DisplayName);
-                item.SubItems.Add(FormatTimestamp(profile.ImportedAt));
                 item.SubItems.Add(FormatTimestamp(profile.LastPlayedAt));
                 item.SubItems.Add(profile.CredentialStatus);
                 item.Tag = profile;
@@ -829,6 +872,7 @@ internal sealed class MainForm : Form
                 selected.EnsureVisible();
             }
 
+            libraryCount.Text = $"YOUR PROFILES   /   {profiles.Count:00}";
             emptyPanel.Visible = profiles.Count == 0;
             profileList.Visible = profiles.Count > 0;
             SetStatus(profiles.Count == 0 ? "No profiles saved." : $"{profiles.Count} profile(s).");
@@ -839,6 +883,7 @@ internal sealed class MainForm : Form
         }
 
         RenderActions();
+        FillListColumns();
     }
 
     private void ImportCurrent(string? forcedName = null)
@@ -855,6 +900,7 @@ internal sealed class MainForm : Form
 
             var importedName = switcher.Import(profileName);
             profileNameBox.Clear();
+            actionPage = ActionPage.Profile;
             LoadProfiles(importedName);
             SetStatus($"Imported profile '{importedName}'.");
         });
@@ -946,6 +992,7 @@ internal sealed class MainForm : Form
 
             var importedName = switcher.CompleteAddAccount(pendingProfileName);
             profileNameBox.Clear();
+            actionPage = ActionPage.Profile;
             LoadProfiles(importedName);
             StopAddAccount($"Added profile '{importedName}'. Capture mode turned off.");
         }
@@ -1126,6 +1173,7 @@ internal sealed class MainForm : Form
             receiveNameBox.Clear();
             pairUrlBox.Clear();
             pairCodeBox.Clear();
+            actionPage = ActionPage.Profile;
             LoadProfiles(importedName);
             SetStatus($"Imported paired profile '{importedName}'.");
         });
@@ -1219,6 +1267,8 @@ internal sealed class MainForm : Form
     {
         var captureOn = switcher.IsCaptureEnabled();
         captureLabel.Visible = captureOn;
+        if (captureLabel.Parent is not null)
+            captureLabel.Parent.Height = (int)((captureOn ? 122 : 96) * DeviceDpi / 96f);
         captureLabel.Text = captureOn ? "Capture mode is on. Normal Play turns it off unless Advanced settings is open." : "";
     }
 
