@@ -13,6 +13,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 // dotnet run --project app/JagexSwitcher.VisualCheck -- .local/avalonia-check
 // Real DPAPI and service operations, synthetic sessions, isolated filesystem paths.
@@ -181,6 +182,28 @@ internal static class Program
         window.Close();
         Check(!Directory.EnumerateFiles(isolated, "*.properties", SearchOption.AllDirectories)
             .Where(p => p.Contains("credentials")).Any(p => File.ReadAllText(p).Contains("JX_SESSION_ID")), "Vault credentials were stored in plaintext.");
+
+        // Clean sample profiles for the README screenshot (docs/assets/launcher.png).
+        isolated = Path.Combine(output, "synthetic-vault-" + Guid.NewGuid());
+        Directory.CreateDirectory(isolated);
+        service = new SwitcherService();
+        foreach (var name in new[] { "vaultRoot", "liveCreds", "runeLiteExe", "runeLiteSettings", "jagexLauncherExe" })
+            typeof(SwitcherService).GetField(name, Private)!.SetValue(service, Path.Combine(isolated, name));
+        Seed("Main", "Oak & Ember");
+        Seed("Ironman", "Iron Tadao");
+        Seed("Pure", "Wildy scout");
+        Seed("Skiller", "Quiet Anvil");
+        var profilesFile = Path.Combine(isolated, "vaultRoot", "profiles.json");
+        var vault = JsonNode.Parse(File.ReadAllText(profilesFile))!;
+        vault["profiles"]!["Main"]!["lastPlayedAt"] = DateTimeOffset.Now.AddDays(-1).ToString("o");
+        File.WriteAllText(profilesFile, vault.ToJsonString());
+        window = new MainWindow(service);
+        window.Show();
+        Pump();
+        list = Find<ListBox>("ProfileList");
+        list.SelectedItem = list.Items.Cast<ProfileInfo>().Single(p => p.Name == "Main");
+        Capture("readme");
+        window.Close();
         Console.WriteLine($"PASS: service self-check, UI import/rename/removal, search, draft retention, transfer rejection/loopback receive/copy/stop, capture cancellation, keyboard, minimum-size and theme renders. {output}");
 
         void Seed(string name, string character)
