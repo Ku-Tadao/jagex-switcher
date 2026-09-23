@@ -13,3 +13,6 @@ app/**/bin/
 app/**/obj/
 dist/
 publish/
+
+# Generated brag videos
+brag-output/

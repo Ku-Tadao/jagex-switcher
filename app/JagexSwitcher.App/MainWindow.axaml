@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:JagexSwitcher.App" x:Class="JagexSwitcher.App.MainWindow"
-        Title="Jagex Switcher" Width="1160" Height="760" MinWidth="940" MinHeight="650"
+        Title="Jagex Switcher" Icon="/Assets/app.ico" Width="1160" Height="760" MinWidth="940" MinHeight="650"
         WindowStartupLocation="CenterScreen" WindowDecorations="None">
   <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
     <Grid RowDefinitions="52,*,40">

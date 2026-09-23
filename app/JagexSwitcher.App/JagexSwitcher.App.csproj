@@ -13,6 +13,7 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
