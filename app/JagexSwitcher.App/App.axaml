@@ -3,32 +3,48 @@
              x:Class="JagexSwitcher.App.App" RequestedThemeVariant="Default">
   <Application.Resources>
     <ResourceDictionary>
-      <SolidColorBrush x:Key="PrimaryBrush">#EAC17A</SolidColorBrush>
-      <SolidColorBrush x:Key="PrimaryInkBrush">#241C10</SolidColorBrush>
+      <!-- Fluent accent (focus rings, check boxes, progress) follows the gold brand colour. -->
+      <Color x:Key="SystemAccentColor">#D9A955</Color>
+      <Color x:Key="SystemAccentColorLight1">#E2B766</Color>
+      <Color x:Key="SystemAccentColorLight2">#E8BE74</Color>
+      <Color x:Key="SystemAccentColorLight3">#F2D39A</Color>
+      <Color x:Key="SystemAccentColorDark1">#9A6B24</Color>
+      <Color x:Key="SystemAccentColorDark2">#855B20</Color>
+      <Color x:Key="SystemAccentColorDark3">#6B4816</Color>
+      <LinearGradientBrush x:Key="PrimaryBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#F4D595" Offset="0" /><GradientStop Color="#DDA650" Offset="1" />
+      </LinearGradientBrush>
+      <SolidColorBrush x:Key="PrimaryInkBrush">#241A0A</SolidColorBrush>
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Dark">
-          <SolidColorBrush x:Key="CanvasBrush">#111417</SolidColorBrush>
-          <SolidColorBrush x:Key="PanelBrush">#191D21</SolidColorBrush>
-          <SolidColorBrush x:Key="RaisedBrush">#23282D</SolidColorBrush>
-          <SolidColorBrush x:Key="LineBrush">#343B41</SolidColorBrush>
-          <SolidColorBrush x:Key="InkBrush">#F4F2EC</SolidColorBrush>
-          <SolidColorBrush x:Key="QuietBrush">#A4AFB7</SolidColorBrush>
-          <SolidColorBrush x:Key="GoldBrush">#EAC17A</SolidColorBrush>
-          <SolidColorBrush x:Key="SelectionBrush">#343126</SolidColorBrush>
-          <SolidColorBrush x:Key="DangerBrush">#F3A39E</SolidColorBrush>
-          <SolidColorBrush x:Key="ReadyBrush">#AACAAE</SolidColorBrush>
+          <SolidColorBrush x:Key="CanvasBrush">#0B0D10</SolidColorBrush>
+          <SolidColorBrush x:Key="PanelBrush">#12151A</SolidColorBrush>
+          <SolidColorBrush x:Key="RaisedBrush">#1B2027</SolidColorBrush>
+          <SolidColorBrush x:Key="HoverBrush">#232A33</SolidColorBrush>
+          <SolidColorBrush x:Key="LineBrush">#262D36</SolidColorBrush>
+          <SolidColorBrush x:Key="InkBrush">#F3F0E9</SolidColorBrush>
+          <SolidColorBrush x:Key="QuietBrush">#9BA6B0</SolidColorBrush>
+          <SolidColorBrush x:Key="GoldBrush">#E8BE74</SolidColorBrush>
+          <SolidColorBrush x:Key="SelectionBrush">#2B261A</SolidColorBrush>
+          <SolidColorBrush x:Key="SelectionLineBrush">#6B5A36</SolidColorBrush>
+          <SolidColorBrush x:Key="DangerBrush">#F29A93</SolidColorBrush>
+          <SolidColorBrush x:Key="DangerFillBrush">#3A1F20</SolidColorBrush>
+          <SolidColorBrush x:Key="ReadyBrush">#86D6A0</SolidColorBrush>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
-          <SolidColorBrush x:Key="CanvasBrush">#F3F4F5</SolidColorBrush>
+          <SolidColorBrush x:Key="CanvasBrush">#EEF0F3</SolidColorBrush>
           <SolidColorBrush x:Key="PanelBrush">#FFFFFF</SolidColorBrush>
-          <SolidColorBrush x:Key="RaisedBrush">#E9EDF0</SolidColorBrush>
-          <SolidColorBrush x:Key="LineBrush">#CED4DA</SolidColorBrush>
-          <SolidColorBrush x:Key="InkBrush">#192127</SolidColorBrush>
+          <SolidColorBrush x:Key="RaisedBrush">#F1F3F5</SolidColorBrush>
+          <SolidColorBrush x:Key="HoverBrush">#E6E9ED</SolidColorBrush>
+          <SolidColorBrush x:Key="LineBrush">#DCE1E6</SolidColorBrush>
+          <SolidColorBrush x:Key="InkBrush">#171D22</SolidColorBrush>
           <SolidColorBrush x:Key="QuietBrush">#56636E</SolidColorBrush>
           <SolidColorBrush x:Key="GoldBrush">#855B20</SolidColorBrush>
-          <SolidColorBrush x:Key="SelectionBrush">#F4EAD6</SolidColorBrush>
+          <SolidColorBrush x:Key="SelectionBrush">#F7EEDC</SolidColorBrush>
+          <SolidColorBrush x:Key="SelectionLineBrush">#D9BC85</SolidColorBrush>
           <SolidColorBrush x:Key="DangerBrush">#A5302C</SolidColorBrush>
-          <SolidColorBrush x:Key="ReadyBrush">#366741</SolidColorBrush>
+          <SolidColorBrush x:Key="DangerFillBrush">#FBEAE8</SolidColorBrush>
+          <SolidColorBrush x:Key="ReadyBrush">#2F7A45</SolidColorBrush>
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
     </ResourceDictionary>
@@ -36,24 +52,70 @@
   <Application.Styles>
     <FluentTheme />
     <Style Selector="Window">
-      <Setter Property="FontFamily" Value="Segoe UI" />
+      <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
       <Setter Property="FontSize" Value="14" />
       <Setter Property="Background" Value="{DynamicResource CanvasBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
     </Style>
+
+    <!-- Text -->
+    <Style Selector="TextBlock.display"><Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
     <Style Selector="TextBlock.quiet"><Setter Property="Foreground" Value="{DynamicResource QuietBrush}" /></Style>
-    <Style Selector="TextBlock.mark, TextBlock.initial"><Setter Property="Foreground" Value="{DynamicResource GoldBrush}" /></Style>
-    <Style Selector="Border.avatar"><Setter Property="Background" Value="{DynamicResource RaisedBrush}" /></Style>
+    <Style Selector="TextBlock.gold"><Setter Property="Foreground" Value="{DynamicResource GoldBrush}" /></Style>
     <Style Selector="TextBlock.eyebrow">
-      <Setter Property="FontSize" Value="10" /><Setter Property="LetterSpacing" Value="1.5" />
+      <Setter Property="FontSize" Value="10" /><Setter Property="LetterSpacing" Value="1.4" />
       <Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Foreground" Value="{DynamicResource QuietBrush}" />
     </Style>
     <Style Selector="TextBlock.icon"><Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" /></Style>
     <Style Selector="TextBlock.ready"><Setter Property="Foreground" Value="{DynamicResource ReadyBrush}" /></Style>
     <Style Selector="TextBlock.danger"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></Style>
+    <Style Selector="Ellipse.dot"><Setter Property="Fill" Value="{DynamicResource DangerBrush}" /></Style>
+    <Style Selector="Ellipse.dot.ready"><Setter Property="Fill" Value="{DynamicResource ReadyBrush}" /></Style>
+    <Style Selector="Ellipse.dot.onart"><Setter Property="Fill" Value="#FF8F86" /></Style>
+    <Style Selector="Ellipse.dot.onart.ready"><Setter Property="Fill" Value="#86D6A0" /></Style>
+    <!-- Capture stepper -->
+    <Style Selector="Border.step">
+      <Setter Property="Width" Value="24" /><Setter Property="Height" Value="24" /><Setter Property="CornerRadius" Value="12" />
+      <Setter Property="BorderThickness" Value="1.5" /><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+    </Style>
+    <Style Selector="Border.step > TextBlock">
+      <Setter Property="FontSize" Value="11" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Foreground" Value="{DynamicResource QuietBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Center" /><Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.step.active"><Setter Property="BorderBrush" Value="{DynamicResource GoldBrush}" /></Style>
+    <Style Selector="Border.step.active > TextBlock"><Setter Property="Foreground" Value="{DynamicResource GoldBrush}" /></Style>
+    <Style Selector="Border.step.done"><Setter Property="Background" Value="{DynamicResource ReadyBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource ReadyBrush}" /></Style>
+    <Style Selector="Border.step.done > TextBlock"><Setter Property="Foreground" Value="{DynamicResource PanelBrush}" /></Style>
+    <!-- Segmented control -->
+    <Style Selector="Border.segmented"><Setter Property="Background" Value="{DynamicResource CanvasBrush}" /><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="4" /></Style>
+    <Style Selector="Border.segmented Button"><Setter Property="MinHeight" Value="34" /><Setter Property="Padding" Value="8,6" /><Setter Property="CornerRadius" Value="9" /><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="FontSize" Value="13" /></Style>
+    <Style Selector="Border.segmented Button:pointerover"><Setter Property="Background" Value="{DynamicResource RaisedBrush}" /></Style>
+    <Style Selector="Border.segmented Button.active"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource SelectionLineBrush}" /></Style>
+    <!-- Text that sits on the artwork stays light in every theme. -->
+    <Style Selector="TextBlock.onart"><Setter Property="Foreground" Value="#FFFFFF" /></Style>
+    <Style Selector="TextBlock.onartquiet"><Setter Property="Foreground" Value="#C9D0D6" /></Style>
+    <Style Selector="TextBlock.onart.ready"><Setter Property="Foreground" Value="#9BE3B3" /></Style>
+    <Style Selector="TextBlock.onart.danger"><Setter Property="Foreground" Value="#FFB3AC" /></Style>
+    <Style Selector="Border.kbd">
+      <Setter Property="Background" Value="{DynamicResource RaisedBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="5" /><Setter Property="Padding" Value="6,2" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.kbd > TextBlock"><Setter Property="FontSize" Value="10" /><Setter Property="Foreground" Value="{DynamicResource QuietBrush}" /></Style>
+    <Style Selector="Border.divider"><Setter Property="Height" Value="1" /><Setter Property="Background" Value="{DynamicResource LineBrush}" /><Setter Property="Margin" Value="0,6" /></Style>
+    <Style Selector="Border.pill">
+      <Setter Property="CornerRadius" Value="999" /><Setter Property="Padding" Value="12,6" />
+      <Setter Property="Background" Value="#66101317" /><Setter Property="BorderBrush" Value="#33FFFFFF" /><Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.banner">
+      <Setter Property="Background" Value="{DynamicResource DangerFillBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+      <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="10" /><Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <!-- Buttons -->
     <Style Selector="Button">
       <Setter Property="Cursor" Value="Hand" /><Setter Property="MinHeight" Value="40" />
-      <Setter Property="CornerRadius" Value="8" /><Setter Property="Padding" Value="16,10" />
+      <Setter Property="CornerRadius" Value="10" /><Setter Property="Padding" Value="16,9" />
       <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" /><Setter Property="BorderThickness" Value="1" />
@@ -62,34 +124,65 @@
         <ControlTemplate>
           <Border Name="ButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+            <Border.Transitions><Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.1" /></Transitions></Border.Transitions>
             <ContentPresenter Content="{TemplateBinding Content}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalContentAlignment="Center" />
           </Border>
         </ControlTemplate>
       </Setter>
     </Style>
-    <Style Selector="Button:pointerover /template/ Border#ButtonBorder"><Setter Property="BorderBrush" Value="{DynamicResource GoldBrush}" /></Style>
-    <Style Selector="Button:pressed /template/ Border#ButtonBorder"><Setter Property="Opacity" Value="0.75" /></Style>
+    <Style Selector="Button:pointerover"><Setter Property="Background" Value="{DynamicResource HoverBrush}" /></Style>
+    <Style Selector="Button:pressed /template/ Border#ButtonBorder"><Setter Property="Opacity" Value="0.7" /></Style>
     <Style Selector="Button:focus-visible /template/ Border#ButtonBorder"><Setter Property="BorderBrush" Value="{DynamicResource GoldBrush}" /><Setter Property="BorderThickness" Value="2" /></Style>
     <Style Selector="Button:disabled"><Setter Property="Opacity" Value="0.4" /></Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" /><Setter Property="Foreground" Value="{DynamicResource PrimaryInkBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" /><Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="MinHeight" Value="48" />
+      <Setter Property="BorderThickness" Value="0" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="MinHeight" Value="44" />
     </Style>
+    <Style Selector="Button.primary:pointerover"><Setter Property="Background" Value="{DynamicResource PrimaryBrush}" /></Style>
+    <Style Selector="Button.primary:pointerover /template/ Border#ButtonBorder"><Setter Property="Opacity" Value="0.9" /></Style>
+    <Style Selector="Button.primary:focus-visible /template/ Border#ButtonBorder"><Setter Property="BorderBrush" Value="{DynamicResource InkBrush}" /></Style>
+    <Style Selector="Button.play /template/ Border#ButtonBorder"><Setter Property="BoxShadow" Value="0 10 32 0 #59E8BE74" /></Style>
     <Style Selector="Button.subtle"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <Style Selector="Button.subtle:pointerover"><Setter Property="Background" Value="{DynamicResource HoverBrush}" /></Style>
     <Style Selector="Button.danger"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></Style>
-    <Style Selector="Button.rail"><Setter Property="Width" Value="64" /><Setter Property="Height" Value="68" /><Setter Property="Padding" Value="0" /></Style>
-    <Style Selector="Button.active"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter Property="Foreground" Value="{DynamicResource GoldBrush}" /></Style>
-    <Style Selector="TextBox">
-      <Setter Property="MinHeight" Value="42" /><Setter Property="CornerRadius" Value="8" />
-      <Setter Property="Background" Value="{DynamicResource CanvasBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource InkBrush}" /><Setter Property="Padding" Value="12,10" />
+    <Style Selector="Button.danger.filled"><Setter Property="Background" Value="{DynamicResource DangerFillBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" /></Style>
+    <Style Selector="Button.square"><Setter Property="Width" Value="40" /><Setter Property="Padding" Value="0" /></Style>
+    <Style Selector="Button.active"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter Property="Foreground" Value="{DynamicResource GoldBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource SelectionLineBrush}" /></Style>
+    <!-- Glass buttons sit on the artwork. -->
+    <Style Selector="Button.glass">
+      <Setter Property="Background" Value="#59101317" /><Setter Property="BorderBrush" Value="#40FFFFFF" /><Setter Property="Foreground" Value="#FFFFFF" />
     </Style>
+    <Style Selector="Button.glass:pointerover"><Setter Property="Background" Value="#8C101317" /><Setter Property="BorderBrush" Value="#73FFFFFF" /></Style>
+    <Style Selector="Button.caption">
+      <Setter Property="Width" Value="46" /><Setter Property="Height" Value="34" /><Setter Property="MinHeight" Value="0" /><Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="6" /><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Foreground" Value="#FFFFFF" /><Setter Property="Cursor" Value="Arrow" />
+    </Style>
+    <Style Selector="Button.caption:pointerover"><Setter Property="Background" Value="#33FFFFFF" /></Style>
+    <Style Selector="Button.caption.close:pointerover"><Setter Property="Background" Value="#C42B1C" /></Style>
+
+    <!-- Inputs -->
+    <Style Selector="TextBox">
+      <Setter Property="MinHeight" Value="40" /><Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Background" Value="{DynamicResource CanvasBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource InkBrush}" /><Setter Property="Padding" Value="12,9" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{DynamicResource CanvasBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource QuietBrush}" />
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{DynamicResource CanvasBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource GoldBrush}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <Style Selector="TextBox.code"><Setter Property="FontFamily" Value="Cascadia Mono, Consolas" /><Setter Property="FontSize" Value="20" /><Setter Property="LetterSpacing" Value="4" /></Style>
+
+    <!-- Profile list -->
     <Style Selector="ListBoxItem">
-      <Setter Property="Padding" Value="14" /><Setter Property="Margin" Value="0,0,0,8" />
+      <Setter Property="Padding" Value="10" /><Setter Property="Margin" Value="0,0,0,4" />
       <Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="12" /><Setter Property="Cursor" Value="Hand" />
       <Setter Property="Template">
         <ControlTemplate>
           <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
@@ -100,11 +193,10 @@
       </Setter>
     </Style>
     <Style Selector="ListBoxItem:pointerover"><Setter Property="Background" Value="{DynamicResource RaisedBrush}" /></Style>
-    <Style Selector="ListBoxItem:selected"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource GoldBrush}" /></Style>
+    <Style Selector="ListBoxItem:selected"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource SelectionLineBrush}" /></Style>
     <Style Selector="ListBoxItem:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource GoldBrush}" /></Style>
+
     <Style Selector="Window.highcontrast ListBoxItem:selected TextBlock"><Setter Property="Foreground" Value="{DynamicResource PrimaryInkBrush}" /></Style>
-    <Style Selector="Window.highcontrast ListBoxItem:selected Border.avatar"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /></Style>
-    <Style Selector="Window.highcontrast TextBlock.mark"><Setter Property="Foreground" Value="{DynamicResource PrimaryInkBrush}" /></Style>
     <Style Selector="Window.highcontrast Button.active"><Setter Property="Foreground" Value="{DynamicResource PrimaryInkBrush}" /></Style>
   </Application.Styles>
 </Application>

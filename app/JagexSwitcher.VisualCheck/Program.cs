@@ -105,9 +105,9 @@ internal static class Program
         Field<TextBox>("pairCode").Text = "12345678";
         Capture("receive");
         Click("Receive profile");
-        Wait(() => Find<TextBlock>("DialogTitle").Text == "Couldn't finish that");
+        Wait(() => Find<Border>("DialogError").IsVisible);
         Capture("transfer-error");
-        Click("Back");
+        Check(Find<TextBlock>("DialogTitle").Text == "Move between PCs", "Transfer error replaced the form.");
         Check(Field<TextBox>("pairCode").Text == "12345678", "Error discarded transfer draft.");
         Escape(); Click("TransferButton");
         Check(Field<TextBox>("pairUrl").Text == "http://example.invalid", "Reopening transfer discarded draft.");
@@ -154,7 +154,7 @@ internal static class Program
         service.SetCaptureEnabled(true);
         typeof(MainWindow).GetField("captureActive", Private)!.SetValue(window, true);
         typeof(MainWindow).GetMethod("ShowCapture", Private)!.Invoke(window, null);
-        Field<TextBlock>("captureStep").Text = "RuneLite detected. Waiting for the captured session…";
+        typeof(MainWindow).GetMethod("SetCaptureStage", Private)!.Invoke(window, new object[] { 2, "RuneLite detected. Waiting for the captured session…" });
         Capture("capture");
         Escape();
         Wait(() => !Find<Border>("DialogOverlay").IsVisible);
@@ -163,7 +163,9 @@ internal static class Program
         Check(Find<TextBlock>("DialogTitle").Text == "Waiting for your character", "Capture cannot be opened a second time.");
         Escape();
 
-        Click("SettingsButton"); Capture("settings"); Escape();
+        Click("SettingsButton"); Click("Light");
+        Check(Application.Current.RequestedThemeVariant == ThemeVariant.Light && File.ReadAllText(Path.Combine(isolated, "vaultRoot", "ui-theme.txt")) == "Light", "Theme choice was not applied and saved.");
+        Click("Dark"); Click("Show advanced capture controls"); Capture("settings"); Escape();
         window.Width = 940; window.Height = 650;
         Capture("minimum");
         Check(Find<Button>("PlayButton").Bounds.Width > 180, "Minimum-width Play button is cramped.");
@@ -226,7 +228,8 @@ internal static class Program
         void Escape() => SendKey(Key.Escape);
         void Capture(string name)
         {
-            Pump();
+            // Let enter animations and transitions settle.
+            for (var i = 0; i < 25; i++) { Thread.Sleep(20); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Pump(); }
             using var frame = window.CaptureRenderedFrame() ?? throw new Exception("No rendered frame.");
             frame.Save(Path.Combine(output, name + ".png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         }

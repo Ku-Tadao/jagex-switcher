@@ -1,4 +1,6 @@
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -12,19 +14,32 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace JagexSwitcher.App;
 
 public partial class MainWindow : Window
 {
     private readonly SwitcherService switcher;
+    private static readonly Animation Enter = new()
+    {
+        Duration = TimeSpan.FromMilliseconds(220), Easing = new CubicEaseOut(),
+        Children =
+        {
+            new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 0d), new Setter(TranslateTransform.YProperty, 14d) } },
+            new KeyFrame { Cue = new Cue(1), Setters = { new Setter(OpacityProperty, 1d), new Setter(TranslateTransform.YProperty, 0d) } }
+        }
+    };
+    private static readonly string[] CaptureSteps = { "Sign in to Jagex Launcher", "Choose RuneLite and start your character", "We save the session automatically" };
     private readonly DispatcherTimer captureTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly DispatcherTimer toastTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private readonly Border[] stepMarks = CaptureSteps.Select((_, i) => new Border { Classes = { "step" }, Child = new TextBlock { Text = (i + 1).ToString() } }).ToArray();
     private readonly TextBox profileName = new() { PlaceholderText = "Blank uses the character name" };
     private readonly TextBox renameName = new();
     private readonly TextBox pairUrl = new() { PlaceholderText = "https://….trycloudflare.com" };
     private readonly TextBox pairCode = new() { PlaceholderText = "8-digit code" };
     private readonly TextBox receiveName = new() { PlaceholderText = "Blank uses the sent name" };
-    private readonly TextBlock captureStep = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock captureStep = new() { TextWrapping = TextWrapping.Wrap, FontSize = 13, Classes = { "gold" } };
     private IReadOnlyList<ProfileInfo> profiles = Array.Empty<ProfileInfo>();
     private SwitcherService.PairTransferSession? activeTransfer;
     private TaskCompletionSource<bool>? confirmation;
@@ -35,6 +50,7 @@ public partial class MainWindow : Window
     private bool captureActive;
     private bool advancedCapture;
     private bool receiving;
+    private bool advancedOpen;
     private int stableTicks;
 
     public MainWindow() : this(new SwitcherService()) { }
@@ -43,7 +59,9 @@ public partial class MainWindow : Window
     {
         this.switcher = switcher;
         InitializeComponent();
-        SizeChanged += (_, _) => HeroPanel.Height = Math.Clamp(Bounds.Height - 496, 160, 320);
+        try { if (File.Exists(ThemeFile)) Application.Current!.RequestedThemeVariant = ParseTheme(File.ReadAllText(ThemeFile)); }
+        catch (Exception ex) { Trace.TraceError("Could not read the saved theme: {0}", ex.Message); }
+        toastTimer.Tick += (_, _) => { if (!busy) { toastTimer.Stop(); Toast.Opacity = 0; } };
         if (Application.Current?.PlatformSettings is { } platform)
         {
             ApplyHighContrast(platform.GetColorValues().ContrastPreference == ColorContrastPreference.High);
@@ -84,8 +102,14 @@ public partial class MainWindow : Window
                 catch (Exception ex) { Trace.TraceError("Could not disable capture on close: {0}", ex.Message); }
             }
         };
-        try { LoadProfiles(); UpdateCapture(); }
+        try
+        {
+            // Open on the most recently played profile so Enter resumes the last session.
+            LoadProfiles(switcher.GetProfiles().Where(p => p.LastPlayed is not null).MaxBy(p => p.LastPlayed)?.Name);
+            UpdateCapture();
+        }
         catch (Exception ex) { ShowError(ex.Message); }
+        Opened += (_, _) => ProfileList.Focus();
     }
 
     private ProfileInfo? Selected => ProfileList.SelectedItem as ProfileInfo;
@@ -108,7 +132,7 @@ public partial class MainWindow : Window
         ProfileList.SelectedItem = matches.FirstOrDefault(p => string.Equals(p.Name, selectName, StringComparison.OrdinalIgnoreCase))
             ?? matches.FirstOrDefault();
         ListEmpty.IsVisible = matches.Count == 0;
-        ListEmpty.Text = profiles.Count == 0 ? "No profiles yet.\nAdd an account to get started." : "No matching profiles.\nTry another name.";
+        ListEmpty.Text = profiles.Count == 0 ? "No profiles yet.\nAdd an account to get started." : $"Nothing matches \u201C{search}\u201D.\nPress Esc to clear the search.";
         UpdateSelection();
     }
 
@@ -116,30 +140,31 @@ public partial class MainWindow : Window
     {
         var selected = Selected;
         SelectedDetails.IsVisible = selected is not null;
-        WelcomePanel.IsVisible = selected is null;
-        CharacterName.Text = selected is null ? "Make yourself at home." :
-            string.IsNullOrWhiteSpace(selected.DisplayName) ? selected.Name : selected.DisplayName;
-        HeroEyebrow.Text = selected is null ? "A NEW ADVENTURE AWAITS" : "SELECTED CHARACTER";
-        HeroCaption.Text = selected is null ? "Your characters. One place to launch." : "Old School RuneScape  /  RuneLite";
+        WelcomePanel.IsVisible = profiles.Count == 0;
         if (selected is null) return;
+        var name = string.IsNullOrWhiteSpace(selected.DisplayName) ? selected.Name : selected.DisplayName;
+        if (CharacterName.Text != name) _ = Enter.RunAsync(SelectedDetails);
+        CharacterName.Text = name;
         SelectedName.Text = selected.Name;
-        CredentialText.Text = selected.IsReady ? "Saved session ready to launch" : $"{selected.CredentialStatus} credentials. Re-import this profile to play.";
-        CredentialText.Classes.Set("ready", selected.IsReady);
-        CredentialText.Classes.Set("danger", !selected.IsReady);
+        CredentialText.Text = selected.IsReady ? "Ready to launch" : selected.CredentialStatus;
+        StatusDot.Classes.Set("ready", selected.IsReady);
         PlayButton.IsEnabled = selected.IsReady;
-        LastPlayedText.Text = FormatTime(selected.LastPlayedAt, "Not played yet");
-        ImportedText.Text = FormatTime(selected.ImportedAt, "Unknown");
+        ReimportButton.IsVisible = !selected.IsReady;
+        LastPlayedText.Text = selected.LastPlayed is { } played ? ProfileInfo.Ago(played) : "Not played yet";
+        ToolTip.SetTip(LastPlayedText, FormatTime(selected.LastPlayedAt, null));
+        ImportedText.Text = FormatTime(selected.ImportedAt, "Unknown", "dd MMM yyyy");
+        ToolTip.SetTip(ImportedText, FormatTime(selected.ImportedAt, null));
     }
 
     private void ShowAdd()
     {
-        var content = Stack(
-            Note("Sign in through Jagex Launcher, choose RuneLite, then start the character you want to save."),
+        ShowDialog("add", "Add an account", "Save a character once. Launch it from here every time after.", Stack(
             Field("Profile name (optional)", profileName),
             ActionButton("Open launcher & capture", StartCapture, "primary"),
-            Note("Already captured a login? Add Current imports valid credentials that RuneLite has written to this PC."),
-            ActionButton("Add Current", () => Import()));
-        ShowDialog("add", "Add an account", "Save a character once. Launch it here next time.", content);
+            Note("Jagex Launcher opens. Sign in, choose RuneLite and start the character you want to save."),
+            Divider(),
+            Note("Already signed in? Add Current imports the login RuneLite last wrote to this PC."),
+            ActionButton("Add Current", () => Import())));
         Dispatcher.UIThread.Post(() => profileName.Focus());
     }
 
@@ -150,25 +175,22 @@ public partial class MainWindow : Window
         ShowDialog("manage", "Manage profile", selected.Name, Stack(
             Field("Profile name", renameName),
             ActionButton("Save name", Rename, "primary"),
-            Note("Re-import replaces this profile's saved session with the current captured RuneLite login."),
-            ActionButton("Re-import current session", Reimport),
-            ActionButton("Open vault folder", OpenVault),
+            Divider(),
+            Note("Re-import replaces this profile's saved session with the current RuneLite login."),
+            Row(ActionButton("Re-import session", Reimport), ActionButton("Open vault folder", OpenVault)),
+            Divider(),
             ActionButton("Remove profile", Remove, "danger")));
         Dispatcher.UIThread.Post(() => { renameName.Focus(); renameName.SelectAll(); });
     }
 
     private void ShowTransfer()
     {
-        var send = Button("Send", () => { receiving = false; ShowTransfer(); });
-        var receive = Button("Receive", () => { receiving = true; ShowTransfer(); });
-        (receiving ? receive : send).Classes.Add("active");
-        var mode = new UniformGrid { Columns = 2, Rows = 1, ColumnSpacing = 8 };
-        mode.Children.Add(send); mode.Children.Add(receive);
-        var content = Stack(mode);
+        var content = Stack(Segmented(receiving ? 1 : 0, index => { receiving = index == 1; ShowTransfer(); }, "Send", "Receive"));
         if (receiving)
         {
             pairUrl.IsReadOnly = pairCode.IsReadOnly = false;
-            content.Children.Add(Note("Paste the pair URL and code from the other PC. The saved session is encrypted for this Windows user after import."));
+            content.Children.Add(Note("Enter the pair URL and code shown on the other PC. The session is encrypted for this Windows user after import."));
+            content.Children.Add(ActionButton("Paste pair info", PastePair));
             content.Children.Add(Field("Pair URL", pairUrl));
             content.Children.Add(Field("Pair code", pairCode));
             content.Children.Add(Field("Import as (optional)", receiveName));
@@ -178,7 +200,7 @@ public partial class MainWindow : Window
         {
             // The live share owns its values; receive drafts are never used for Copy.
             var url = new TextBox { Text = activeTransfer.TunnelUrl, IsReadOnly = true };
-            var code = new TextBox { Text = activeTransfer.Code, IsReadOnly = true };
+            var code = new TextBox { Text = activeTransfer.Code, IsReadOnly = true, Classes = { "code" }, TextAlignment = TextAlignment.Center };
             content.Children.Add(Note("Share these details with your other PC. One import only; the share expires in 15 minutes. Keep this app open."));
             content.Children.Add(Field("Pair URL", url));
             content.Children.Add(Field("Pair code", code));
@@ -198,27 +220,39 @@ public partial class MainWindow : Window
 
     private void ShowSettings()
     {
-        var theme = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = new[] { "Follow Windows", "Dark", "Light" },
-            SelectedIndex = Application.Current!.RequestedThemeVariant == ThemeVariant.Dark ? 1 :
-                Application.Current.RequestedThemeVariant == ThemeVariant.Light ? 2 : 0 };
-        theme.SelectionChanged += (_, _) => Application.Current!.RequestedThemeVariant = theme.SelectedIndex switch
-            { 1 => ThemeVariant.Dark, 2 => ThemeVariant.Light, _ => ThemeVariant.Default };
-        var keepCapture = new CheckBox { Content = "Keep capture enabled when playing", IsChecked = advancedCapture };
-        keepCapture.IsCheckedChanged += (_, _) => advancedCapture = keepCapture.IsChecked == true;
-        var advanced = Stack(
-            Note("Capture can write live session credentials to disk. Normal Play turns it off. Only keep it enabled while troubleshooting."),
-            keepCapture,
-            ActionButton("Prepare login", () => { SetStatus(switcher.PrepareLogin()); return Task.CompletedTask; }),
-            ActionButton("Capture login", () => { switcher.StartCaptureLogin(); SetStatus("Capture enabled; Jagex Launcher opened."); return Task.CompletedTask; }),
-            ActionButton("Enable capture", () => { switcher.SetCaptureEnabled(true); SetStatus("Capture enabled."); return Task.CompletedTask; }),
-            ActionButton("Disable capture", () => { switcher.SetCaptureEnabled(false); SetStatus("Capture disabled."); return Task.CompletedTask; }),
-            ActionButton("Forget all profiles", ForgetAll, "danger"));
-        ShowDialog("settings", "Settings", "Appearance, local storage, and capture tools.", Stack(
-            Field("Appearance (this session)", theme),
-            Note("Profiles stay in your existing Windows-encrypted vault. No account migration is needed."),
+        var variant = Application.Current!.RequestedThemeVariant;
+        var theme = Segmented(variant == ThemeVariant.Dark ? 1 : variant == ThemeVariant.Light ? 2 : 0, index =>
+        {
+            var name = index switch { 1 => "Dark", 2 => "Light", _ => "System" };
+            Application.Current.RequestedThemeVariant = ParseTheme(name);
+            try { Directory.CreateDirectory(switcher.GetVaultRoot()); File.WriteAllText(ThemeFile, name); }
+            catch (Exception ex) { SetStatus($"Theme applied, but it could not be saved: {ex.Message}"); }
+            ShowSettings();
+        }, "System", "Dark", "Light");
+        var content = Stack(
+            Field("Appearance", theme),
+            Divider(),
+            Note("Profiles live in a Windows-encrypted vault on this PC. Nothing is uploaded."),
             ActionButton("Open vault folder", OpenVault),
-            new Expander { Header = "Advanced capture controls", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch }));
+            Divider(),
+            Note("Shortcuts:  Enter play  ·  Ctrl+F search  ·  Ctrl+N add  ·  F2 manage  ·  Del remove  ·  F5 refresh"),
+            Divider(),
+            Button(advancedOpen ? "Hide advanced capture controls" : "Show advanced capture controls", () => { advancedOpen = !advancedOpen; ShowSettings(); }, "subtle"));
+        if (advancedOpen)
+        {
+            var keepCapture = new CheckBox { Content = "Keep capture enabled when playing", IsChecked = advancedCapture };
+            keepCapture.IsCheckedChanged += (_, _) => advancedCapture = keepCapture.IsChecked == true;
+            content.Children.Add(Note("Capture can write live session credentials to disk. Normal Play turns it off. Only keep it enabled while troubleshooting."));
+            content.Children.Add(keepCapture);
+            content.Children.Add(Row(
+                ActionButton("Prepare login", () => { SetStatus(switcher.PrepareLogin()); return Task.CompletedTask; }),
+                ActionButton("Capture login", () => { switcher.StartCaptureLogin(); SetStatus("Capture enabled; Jagex Launcher opened."); return Task.CompletedTask; })));
+            content.Children.Add(Row(
+                ActionButton("Enable capture", () => { switcher.SetCaptureEnabled(true); SetStatus("Capture enabled."); return Task.CompletedTask; }),
+                ActionButton("Disable capture", () => { switcher.SetCaptureEnabled(false); SetStatus("Capture disabled."); return Task.CompletedTask; })));
+            content.Children.Add(ActionButton("Forget all profiles", ForgetAll, "danger"));
+        }
+        ShowDialog("settings", "Settings", "Appearance, local storage, and capture tools.", content);
     }
 
     private async Task Import(string? forcedName = null)
@@ -246,16 +280,39 @@ public partial class MainWindow : Window
         pendingProfileName = name;
         stableTicks = 0;
         captureActive = true;
-        captureStep.Text = "Opening Jagex Launcher…";
+        SetCaptureStage(0, "Opening Jagex Launcher…");
         ShowCapture();
         captureTimer.Start();
         SetStatus("In Jagex Launcher, choose RuneLite and start your character.");
     }
 
-    private void ShowCapture() => ShowDialog("capture", "Waiting for your character", "Keep this window open while the session is captured.", Stack(
-        Note("1. Choose RuneLite in Jagex Launcher.\n2. Start the character you want to save.\n3. We'll capture and save the session automatically."),
-        new ProgressBar { IsIndeterminate = true, Height = 4, Margin = new Thickness(0, 8) },
-        captureStep, ActionButton("Cancel capture", CancelCapture)));
+    private void ShowCapture()
+    {
+        var steps = new StackPanel { Spacing = 12 };
+        for (var i = 0; i < CaptureSteps.Length; i++)
+        {
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 12 };
+            if (stepMarks[i].Parent is Panel parent) parent.Children.Remove(stepMarks[i]);
+            var label = new TextBlock { Text = CaptureSteps[i], FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(label, 1);
+            row.Children.Add(stepMarks[i]); row.Children.Add(label);
+            steps.Children.Add(row);
+        }
+        ShowDialog("capture", "Waiting for your character", "Keep this window open while the session is captured.", Stack(
+            steps, new ProgressBar { IsIndeterminate = true, Height = 3, MinHeight = 3, Margin = new Thickness(0, 6, 0, 0) },
+            captureStep, ActionButton("Cancel capture", CancelCapture)));
+    }
+
+    private void SetCaptureStage(int stage, string text)
+    {
+        captureStep.Text = text;
+        for (var i = 0; i < stepMarks.Length; i++)
+        {
+            stepMarks[i].Classes.Set("done", i < stage);
+            stepMarks[i].Classes.Set("active", i == stage);
+            ((TextBlock)stepMarks[i].Child!).Text = i < stage ? "\u2713" : (i + 1).ToString();
+        }
+    }
 
     private Task WatchCapture()
     {
@@ -264,14 +321,14 @@ public partial class MainWindow : Window
         var launcher = switcher.IsJagexLauncherRunning();
         var runeLite = switcher.IsRuneLiteRunning();
         if (runeLite && !launcher) throw new InvalidOperationException("RuneLite is running without Jagex Launcher. Start it through Jagex Launcher to capture a session.");
-        if (!launcher) captureStep.Text = "Waiting for Jagex Launcher…";
-        else if (!runeLite) captureStep.Text = "Launcher detected. Start your character in RuneLite.";
+        if (!launcher) SetCaptureStage(0, "Waiting for Jagex Launcher…");
+        else if (!runeLite) SetCaptureStage(1, "Launcher detected. Start your character in RuneLite.");
         else if (!switcher.HasCapturedCredentials())
         {
             stableTicks = 0;
-            captureStep.Text = "RuneLite detected. Waiting for the captured session…";
+            SetCaptureStage(2, "RuneLite detected. Waiting for the captured session…");
         }
-        else if (++stableTicks < 2) captureStep.Text = "Session found. Verifying…";
+        else if (++stableTicks < 2) SetCaptureStage(3, "Session found. Verifying…");
         else
         {
             var name = switcher.CompleteAddAccount(pendingProfileName);
@@ -375,6 +432,18 @@ public partial class MainWindow : Window
         SetStatus("Pair info copied. Keep the app open until the other PC imports it.");
     }
 
+    private async Task PastePair()
+    {
+        var clipboard = Clipboard ?? throw new InvalidOperationException("The clipboard is unavailable. Type the pair URL and code instead.");
+        var text = await clipboard.TryGetTextAsync() ?? "";
+        var url = Regex.Match(text, @"https?://\S+");
+        var code = Regex.Match(url.Success ? text.Replace(url.Value, "") : text, @"\b\d{8}\b");
+        if (!url.Success && !code.Success) throw new InvalidOperationException("The clipboard has no pair info. Use Copy pair info on the sending PC first.");
+        if (url.Success) pairUrl.Text = url.Value;
+        if (code.Success) pairCode.Text = code.Value;
+        SetStatus("Pair info pasted.");
+    }
+
     private void StopTransfer(string message)
     {
         activeTransfer?.Dispose(); activeTransfer = null;
@@ -399,8 +468,11 @@ public partial class MainWindow : Window
         var previous = (dialog, DialogTitle.Text, DialogSubtitle.Text, DialogContent.Content, DialogOverlay.IsVisible);
         confirmation = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var result = confirmation;
-        ShowDialog("confirm", title, message, Stack(
-            Button(accept, () => result.TrySetResult(true), "danger"), Button("Cancel", () => result.TrySetResult(false))));
+        var cancel = Button("Cancel", () => result.TrySetResult(false));
+        var confirm = Button(accept, () => result.TrySetResult(true), "danger");
+        confirm.Classes.Add("filled");
+        ShowDialog("confirm", title, message, Row(cancel, confirm));
+        cancel.Focus();
         var confirmed = await result.Task;
         confirmation = null;
         if (closed) return false;
@@ -411,11 +483,15 @@ public partial class MainWindow : Window
 
     private void ShowDialog(string kind, string title, string subtitle, Control content)
     {
+        if (!DialogOverlay.IsVisible) _ = Enter.RunAsync(DialogCard);
         dialog = kind;
         DialogTitle.Text = title; DialogSubtitle.Text = subtitle;
         DialogContent.Content = content;
+        DialogError.IsVisible = false;
+        if (!DialogOverlay.IsVisible) Toast.Opacity = 0; // an older message should not hang over a fresh dialog
         DialogOverlay.IsVisible = true;
         Workspace.IsEnabled = false;
+        Workspace.Effect = new BlurEffect { Radius = 12 };
         DialogClose.Focus();
     }
 
@@ -424,21 +500,21 @@ public partial class MainWindow : Window
         dialog = "";
         DialogOverlay.IsVisible = false;
         DialogContent.Content = null;
+        Workspace.Effect = null;
         Workspace.IsEnabled = !busy;
         Dispatcher.UIThread.Post(() => { if (!closed && !DialogOverlay.IsVisible) ProfileList.Focus(); });
     }
 
     private void ShowError(string message)
     {
-        SetStatus(message);
-        // Retain input controls so a failed import or transfer can be corrected.
-        var previous = (dialog, DialogTitle.Text, DialogSubtitle.Text, DialogContent.Content, DialogOverlay.IsVisible);
-        ShowDialog("error", "Couldn't finish that", message, Stack(Button("Back", () =>
+        // Form dialogs keep their inputs and show the problem inline so it can be corrected in place.
+        if (DialogOverlay.IsVisible && dialog is "add" or "manage" or "transfer" or "settings")
         {
-            if (previous.IsVisible && previous.dialog != "capture")
-                ShowDialog(previous.dialog, previous.Item2!, previous.Item3!, (Control)previous.Content!);
-            else HideDialog();
-        }, "primary")));
+            DialogErrorText.Text = message;
+            DialogError.IsVisible = true;
+            return;
+        }
+        ShowDialog("error", "Couldn't finish that", message, Stack(Button("OK", HideDialog, "primary")));
     }
 
     private async Task RunAsync(Func<Task> action)
@@ -447,6 +523,7 @@ public partial class MainWindow : Window
         busy = true;
         Workspace.IsEnabled = false;
         BusyIndicator.IsVisible = true;
+        DialogError.IsVisible = false;
         try { await action(); UpdateCapture(); }
         catch (Exception ex)
         {
@@ -467,23 +544,46 @@ public partial class MainWindow : Window
     }
 
     private void UpdateCapture() => CaptureBadge.IsVisible = switcher.IsCaptureEnabled();
-    private void SetStatus(string text) { StatusText.Text = text; ToolTip.SetTip(StatusText, text); }
+    private void SetStatus(string text)
+    {
+        StatusText.Text = text;
+        // Over the artwork normally; below the dialog while one is open.
+        Toast.VerticalAlignment = DialogOverlay.IsVisible ? VerticalAlignment.Bottom : VerticalAlignment.Top;
+        Toast.Margin = DialogOverlay.IsVisible ? new Thickness(24, 0, 24, 20) : new Thickness(336, 14, 160, 0);
+        Toast.Opacity = 1;
+        toastTimer.Stop(); toastTimer.Start();
+    }
 
     private async void HandleKeys(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && DialogOverlay.IsVisible)
-        {
-            CloseDialogClicked(this, new RoutedEventArgs()); e.Handled = true; return;
-        }
-        if (busy || DialogOverlay.IsVisible || captureActive) return;
         var focused = FocusManager?.GetFocusedElement() as Control;
+        if (DialogOverlay.IsVisible)
+        {
+            if (e.Key == Key.Escape) { CloseDialogClicked(this, new RoutedEventArgs()); e.Handled = true; }
+            // Enter in a text field runs the dialog's primary action.
+            else if (e.Key == Key.Enter && focused is TextBox && !busy
+                && DialogCard.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Classes.Contains("primary") && b.IsEffectivelyEnabled) is { } primary)
+            {
+                primary.RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); e.Handled = true;
+            }
+            return;
+        }
+        if (busy || captureActive) return;
+        var inSearch = focused == SearchBox;
         var inList = focused == ProfileList || focused?.GetVisualAncestors().Contains(ProfileList) == true;
+        var ctrl = e.KeyModifiers == KeyModifiers.Control;
         switch (e.Key)
         {
             case Key.F5: await RunAsync(() => { LoadProfiles(); SetStatus("Profiles refreshed."); return Task.CompletedTask; }); break;
+            case Key.F when ctrl: SearchBox.Focus(); SearchBox.SelectAll(); break;
+            case Key.N when ctrl: ShowAdd(); break;
+            case Key.Escape when inSearch && !string.IsNullOrEmpty(SearchBox.Text): SearchBox.Text = ""; break;
+            // Type to filter, arrow to pick, Enter to play, all without leaving the search box.
+            case Key.Down or Key.Up when inSearch && ProfileList.ItemCount > 0:
+                ProfileList.SelectedIndex = Math.Clamp(ProfileList.SelectedIndex + (e.Key == Key.Down ? 1 : -1), 0, ProfileList.ItemCount - 1); break;
             case Key.F2 when Selected is not null: ShowManage(); break;
             case Key.Delete when inList: await RunAsync(Remove); break;
-            case Key.Enter when (inList || focused == this || focused is null) && Selected is not null: await RunAsync(Play); break;
+            case Key.Enter when (inList || inSearch || focused == this || focused is null) && Selected is not null: await RunAsync(Play); break;
             default: return;
         }
         e.Handled = true;
@@ -501,25 +601,16 @@ public partial class MainWindow : Window
     private void OpenManage(object? sender, RoutedEventArgs e) => ShowManage();
     private void OpenTransfer(object? sender, RoutedEventArgs e) => ShowTransfer();
     private void OpenSettings(object? sender, RoutedEventArgs e) => ShowSettings();
-    private void FocusProfiles(object? sender, RoutedEventArgs e) => ProfileList.Focus();
+    private void OpenReceive(object? sender, RoutedEventArgs e) { receiving = true; ShowTransfer(); }
+    private void ScrimPressed(object? sender, PointerPressedEventArgs e) { if (e.Source == DialogOverlay) CloseDialogClicked(sender, e); }
+    private async void ReimportClicked(object? sender, RoutedEventArgs e) => await RunAsync(Reimport);
     private void SelectionChanged(object? sender, SelectionChangedEventArgs e) => UpdateSelection();
     private void SearchChanged(object? sender, TextChangedEventArgs e) => ApplyFilter(Selected?.Name);
-    private async void RefreshClicked(object? sender, RoutedEventArgs e) => await RunAsync(() => { LoadProfiles(); SetStatus("Profiles refreshed."); return Task.CompletedTask; });
     private async void PlayClicked(object? sender, RoutedEventArgs e) => await RunAsync(Play);
     private async void PlayDoubleTapped(object? sender, TappedEventArgs e) => await RunAsync(Play);
     private void Minimize(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void Maximize(object? sender, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     private void CloseWindow(object? sender, RoutedEventArgs e) => Close();
-    private void DragWindow(object? sender, PointerPressedEventArgs e)
-    {
-        if (e.Source is Button || e.Source is Control control && control.GetVisualAncestors().OfType<Button>().Any()) return;
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        {
-            if (e.ClickCount == 2) Maximize(sender, e);
-            else BeginMoveDrag(e);
-        }
-    }
-
     private Button ActionButton(string label, Func<Task> action, string style = "") => Button(label, async () => await RunAsync(action), style);
     private static Button Button(string label, Action action, string style = "")
     {
@@ -545,14 +636,29 @@ public partial class MainWindow : Window
         }
         return stack;
     }
+    private static UniformGrid Row(params Control[] children)
+    {
+        var row = new UniformGrid { Rows = 1, Columns = children.Length, ColumnSpacing = 10 };
+        row.Children.AddRange(children);
+        return row;
+    }
+    private static Border Divider() => new() { Classes = { "divider" } };
+    private static Border Segmented(int active, Action<int> select, params string[] labels)
+    {
+        var buttons = labels.Select((label, i) => Button(label, () => select(i))).ToArray();
+        buttons[active].Classes.Add("active");
+        return new Border { Classes = { "segmented" }, Child = Row(buttons) };
+    }
+    private string ThemeFile => Path.Combine(switcher.GetVaultRoot(), "ui-theme.txt");
+    private static ThemeVariant ParseTheme(string name) => name.Trim() switch { "Dark" => ThemeVariant.Dark, "Light" => ThemeVariant.Light, _ => ThemeVariant.Default };
     private static TextBlock Note(string text) => new() { Text = text, Classes = { "quiet" }, FontSize = 13, TextWrapping = TextWrapping.Wrap, LineHeight = 21 };
     private static Control Field(string label, Control input)
     {
         Avalonia.Automation.AutomationProperties.SetName(input, label);
         return Stack(new TextBlock { Text = label, FontSize = 12, Classes = { "quiet" } }, input);
     }
-    private static string FormatTime(string value, string empty) => DateTimeOffset.TryParse(value, out var time)
-        ? time.ToLocalTime().ToString("dd MMM yyyy · HH:mm") : empty;
+    private static string? FormatTime(string value, string? empty, string format = "dd MMM yyyy · HH:mm") =>
+        DateTimeOffset.TryParse(value, out var time) ? time.ToLocalTime().ToString(format) : empty;
 
     private void PlatformColorsChanged(object? sender, PlatformColorValues values) =>
         ApplyHighContrast(values.ContrastPreference == ColorContrastPreference.High);
@@ -562,7 +668,8 @@ public partial class MainWindow : Window
         Classes.Set("highcontrast", enabled);
         LandscapeImage.IsVisible = !enabled;
         foreach (var (key, systemColor) in new[] {
-            ("CanvasBrush", 5), ("PanelBrush", 5), ("RaisedBrush", 15), ("LineBrush", 8),
+            ("CanvasBrush", 5), ("PanelBrush", 5), ("RaisedBrush", 15), ("HoverBrush", 15), ("LineBrush", 8),
+            ("SelectionLineBrush", 13), ("DangerFillBrush", 5),
             ("InkBrush", 8), ("QuietBrush", 8), ("GoldBrush", 13), ("SelectionBrush", 13),
             ("DangerBrush", 8), ("ReadyBrush", 8), ("PrimaryBrush", 13), ("PrimaryInkBrush", 14) })
         {

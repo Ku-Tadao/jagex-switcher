@@ -63,7 +63,9 @@ There is no app analytics service or developer-operated backend. See the [privac
 
 | Key | Action |
 | --- | --- |
-| Enter | Play the selected character from the profile list |
+| Enter | Play the selected character from the profile list or search box |
+| Ctrl+F | Search profiles (Up/Down picks a result, Escape clears) |
+| Ctrl+N | Add an account |
 | F5 | Refresh profiles |
 | F2 | Open profile management and rename |
 | Delete | Remove the selected profile after confirmation |
